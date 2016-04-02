@@ -6,6 +6,7 @@ Author: Alex Yushin <alexis@ww.net>
 """
 
 import sys
+import os
 
 from datetime import date
 
@@ -25,6 +26,7 @@ sys.path.append(SELENIUM_DIR)
 
 # The path to firefox
 FIREFOX_PATH='/Applications/Firefox.app/Contents/MacOS'
+os.environ['PATH'] = FIREFOX_PATH
 
 #
 #
@@ -43,7 +45,8 @@ statements = wbc.scrape_all(CONNECTIONS)
 # Moneydance part
 #
 #
-from com.moneydance.apps.md.model import ParentTxn, SplitTxn, AbstractTxn
+
+from com.moneydance.apps.md.model import ParentTxn, SplitTxn
 
 ra = moneydance.getRootAccount()
 
