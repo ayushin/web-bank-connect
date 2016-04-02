@@ -2,6 +2,8 @@
 Web-bank-connect for Internatinal Card Services NL
 http://www.icscards.nl
 
+Author: Alex Yushin <alexis@ww.net>
+
 """
 
 from connector import Connector
@@ -99,7 +101,7 @@ class Plugin(Connector):
                     sign = tr.find_element_by_xpath("td[not(@id) and not(@class)]/span").text
 
                     if sign == 'Af':
-                        line['type'] = 'DEBET'
+                        line['type'] = 'DEBIT'
                         line['amount'] = -line['amount']
                     elif sign == 'Bij':
                         line['type'] = 'CREDIT'

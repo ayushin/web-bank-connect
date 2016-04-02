@@ -1,4 +1,11 @@
-from hashlib import md5
+#
+#
+# Author: Alex Yushin <alexis@ww.net>
+#
+#
+
+
+#  from hashlib import md5
 
 from local_connections import *
 
@@ -10,6 +17,7 @@ def load_plugin(plugin_name):
     for comp in parts[1:]:
         m = getattr(m, comp)
     return m()
+
 #
 #
 #
@@ -59,8 +67,7 @@ def scrape_all(connections):
 
         for account in connection['accounts']:
             transactions = getattr(plugin, 'scrape_' + account['type'])(account = account['name'],
-                                        datefrom = account.get('from', None),
-                                        dateuntil = account.get('until', None))
+                                        datefrom = account.get('from', None))
 
             generate_refnums(transactions)
 
@@ -75,6 +82,7 @@ def scrape_all(connections):
 # Do the actual scraping
 #
 if __name__ == '__main__':
+
     all_statements = scrape_all(CONNECTIONS)
 
     print all_statements
