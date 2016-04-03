@@ -5,7 +5,7 @@
 #
 
 
-#  from hashlib import md5
+from hashlib import md5
 
 from local_connections import *
 
@@ -36,6 +36,9 @@ def load_plugin(plugin_name):
 #
 def generate_refnums(transactions):
     duplicates = {}
+
+    if not transactions:
+        return
 
     for transaction in transactions:
         # only generate transaction ids if there is no unique identifier scraped from bank
