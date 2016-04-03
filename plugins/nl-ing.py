@@ -192,8 +192,10 @@ class Plugin(Connector):
             #
             # XXX We should do some name and memo beautifying here
             #
-            m = re.match('Naam:(.+)\n(.+)', td_descr.text)
-            line['name'] = m.group(1)
+            print "descr: %s" % td_descr.text
+
+            m = re.match('(Naam:)?(.+)\n(.+)', td_descr.text)
+            line['name'] = m.group(2)
             line['memo'] = td_descr.text
 
             transactions.append(line)
