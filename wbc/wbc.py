@@ -19,6 +19,9 @@ class Connector:
     def scrape(self, account, datefrom):
         pass
 
+    def list_accounts(self):
+        pass
+
     def logout(self):
         self.close_browser()
         pass
@@ -87,7 +90,7 @@ def scrape_all(connections):
 
         for account in connection['accounts']:
             transactions = getattr(plugin, 'scrape_' + account['type'])(account = account['name'],
-                                        datefrom = account.get('from', None))
+                                        datefrom = account.get('datefrom', None))
 
             generate_refnums(transactions)
 
