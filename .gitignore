@@ -1,9 +1,10 @@
 # Local harcoded settings & credentials
+config.py
 
-local_connections.py
+# Test scripts
+test/*
 
 .idea
-contrib/moneydance_test.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

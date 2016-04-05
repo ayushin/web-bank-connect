@@ -4,10 +4,27 @@
 #
 #
 
-
+from selenium import webdriver
 from hashlib import md5
 
-from local_connections import *
+
+# Definition of web bank connector
+class Connector:
+    def open_browser(self):
+        self.driver = webdriver.Firefox()
+
+    def login(self, username, password):
+        pass
+
+    def scrape(self, account, datefrom):
+        pass
+
+    def logout(self):
+        self.close_browser()
+        pass
+
+    def close_browser(self):
+        self.driver.quit()
 
 def load_plugin(plugin_name):
     plugin  = 'plugins.' + plugin_name + '.Plugin'
@@ -80,12 +97,3 @@ def scrape_all(connections):
         plugin.logout()
 
     return statements
-
-#
-# Do the actual scraping
-#
-if __name__ == '__main__':
-
-    all_statements = scrape_all(CONNECTIONS)
-
-    print all_statements

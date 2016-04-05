@@ -6,11 +6,12 @@ Author: Alex Yushin <alexis@ww.net>
 
 """
 
-from connector import Connector
-
-from selenium.webdriver.support.ui import Select, WebDriverWait
-from selenium.common.exceptions import NoSuchElementException
 from datetime import date, datetime
+
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.common.exceptions import NoSuchElementException
+
+from wbc.wbc import Connector
 
 class Plugin(Connector):
     login_url = 'https://www.icscards.nl/ics/login'

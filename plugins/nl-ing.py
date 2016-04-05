@@ -7,7 +7,8 @@ Author: Alex Yushin <alexis@ww.net>
 
 """
 
-from connector import Connector
+from wbc.wbc import Connector
+
 from datetime import datetime, date, timedelta
 import re
 
