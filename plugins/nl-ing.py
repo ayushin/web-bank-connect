@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Web-bank-connect for ING NL
 
@@ -206,3 +207,44 @@ class Plugin(Connector):
     def logout(self):
         # keep the browser open for the development
         return
+
+    #
+    #
+    # Return the list of the current accounts
+    #
+    #
+    def list_accounts(self):
+        accounts = []
+        self.driver.get(self.accounts_url)
+
+        accounts_ol = self.driver.find_element_by_xpath("//div[@id='accounts']/div/div/ol")
+
+        # Expand...
+        while True:
+            showMore = accounts_ol.find_element_by_id('accountslider')
+            if showMore.is_displayed():
+                showMore.click()
+            else:
+                break
+
+        # Get the list of current accounts
+        for account_li in accounts_ol.find_elements_by_tag_name('li'):
+            print 'found %s - id %s' % (account_li.text, account_li.id)
+            # We skip the "accountslider" and "totalBalance" items...
+            if account_li.get_attribute('id'):
+                continue
+
+            account_data = account_li.find_elements_by_xpath('a/div')
+            account = {
+                'type'          :   'current',
+                'name'          :   account_data[1].text,
+                'owner'         :   account_data[0].text,
+                'balance'       :   {
+                    'amount'    :   float(account_data[2].text.encode('utf-8').replace('.','').replace(',','.').replace('€ ','')),
+                    'date'      :   date.today()
+                }
+            }
+
+            accounts.append(account)
+
+        return accounts
