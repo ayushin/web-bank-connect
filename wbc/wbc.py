@@ -90,7 +90,7 @@ def scrape_all(connections):
 
         for account in connection['accounts']:
             transactions = getattr(plugin, 'scrape_' + account['type'])(account = account['name'],
-                                        datefrom = account.get('datefrom', None))
+                                        datefrom = account.get('lastupdate', None))
 
             generate_refnums(transactions)
 

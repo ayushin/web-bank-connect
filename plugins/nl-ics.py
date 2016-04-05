@@ -33,7 +33,7 @@ class Plugin(Connector):
         WebDriverWait(self.driver, 3)
         assert "International Card Services" in self.driver.title
 
-    def scrape_ccard(self, account, datefrom = None, dateuntil = None):
+    def scrape_ccard(self, account, datefrom = None):
         # Download credit card statement
         print "Navigating to the credit card URL..."
         self.driver.get(self.creditcard_url)
@@ -110,7 +110,7 @@ class Plugin(Connector):
                         raise ValueError('No sign for transaction')
 
                     # Are we done?
-                    if line['date'] < datefrom:
+                    if datefrom and line['date'] < datefrom:
                         return transactions
 
                     transactions.append(line)

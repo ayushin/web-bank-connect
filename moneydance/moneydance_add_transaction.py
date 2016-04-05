@@ -40,7 +40,7 @@ newTxn.setTxnType(transactionType)
 downloadedTransactions.addNewTxn(newTxn)
 
 downloadedTransactions.setOnlineLedgerBalance(account.getCurrencyType().parse(newLedgerBalanceAmount, ','),
-                                              newLedgerBalanceDate.toordinal())
+                  long((newLedgerBalanceDate - date(1970, 1, 1)).total_seconds()*1000))
 
 # A little MoneyDance magic to get the transactions updated -- thank you Sean!
 moneydance.getUI().getOnlineManager().getDefaultUIProxy().receivedStatement(MDAccountProxy(account))

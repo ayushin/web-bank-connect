@@ -46,19 +46,20 @@ ra = moneydance.getRootAccount()
 # find out the last transaction...
 for connection in CONNECTIONS:
     for account in connection['accounts']:
-        mdAccount = ra.getAccountByName(account['name'])
+        # If account's moneydance name is not configured, set it to account's name
+        if not account.get('moneydance_name'):
+            account['moneydance_name'] = account['name']
+
+        mdAccount = ra.getAccountByName(account['moneydance_name'])
         assert mdAccount
 
         # Find the last downloaded transaction in this account -- thank you Sean!
         # ...unless hardcoded or overriden in CONNECTIONS
-        account['datefrom'] = account.get('datefrom',
+        account['lastupdate'] = account.get('lastupdate',
                     datetime.utcfromtimestamp(MDAccountProxy(mdAccount).getOFXLastTxnUpdate()/1000).date())
-        
-        print 'last download for this account was on %s' % account['datefrom']
 
-        # If account's moneydance name is not configured, set it to account's name
-        if not account.get('moneydance_name'):
-            account['moneydance_name'] = account['name']
+        print 'last download for this account was on %s' % account['lastupdate']
+
 
 #
 #
@@ -103,11 +104,13 @@ for statement in statements:
                 long((statement['balance']['date'] - date(1970, 1, 1)).total_seconds()*1000))
 
 
-    # A little MoneyDance magic to get the transactions updated -- thank you Sean!
+    # Update the last download date...
+    #
     # One weak spot below can be if some older transactions only appear at some later date, after a
     # weekend for example: sale was done saturday, download was done saturday, transaction was reserved only,
     # sunday we downloaded transactions again, so the download date is sunday, but
     # then monday the saturday transaction was finalised but with the saturday's date
-
     MDAccountProxy(mdAccount).setOFXLastTxnUpdate(today_long)
+
+    # A little MoneyDance magic to get the transactions updated -- thank you Sean!
     moneydance.getUI().getOnlineManager().getDefaultUIProxy().receivedStatement(MDAccountProxy(mdAccount))
