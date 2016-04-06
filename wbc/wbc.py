@@ -6,10 +6,15 @@
 
 from selenium import webdriver
 from hashlib import md5
+import logging
 
 
 # Definition of web bank connector
 class Connector:
+    def __init__(self):
+        logging.info('init method')
+        self.logger = logging.getLogger(__name__)
+
     def open_browser(self):
         self.driver = webdriver.Firefox()
 

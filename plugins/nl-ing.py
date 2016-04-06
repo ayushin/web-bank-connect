@@ -2,34 +2,29 @@
 """
 Web-bank-connect for ING NL
 
-http://mijn.ing.nl
 
 Author: Alex Yushin <alexis@ww.net>
 
 """
 
-from wbc.wbc import Connector
-
-from datetime import datetime, date, timedelta
 import re
+from datetime import date, datetime
 
 from selenium.webdriver.support.ui import Select, WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException,TimeoutException,ElementNotVisibleException
-from datetime import date, datetime
 
-from selenium.webdriver.support.ui import Select
-from selenium.webdriver.common.keys import Keys
+from wbc.wbc import Connector
 
-from time import sleep
-
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 class Plugin(Connector):
     login_url = 'https://mijn.ing.nl/internetbankieren/SesamLoginServlet'
     accounts_url = 'https://bankieren.mijn.ing.nl/particulier/betalen/index'
     creditcard_url = 'https://bankieren.mijn.ing.nl/particulier/creditcard/saldo-overzicht/index'
-
 
     #
     #
@@ -37,7 +32,10 @@ class Plugin(Connector):
     #
     #
     def login(self, username, password):
+        logger.info('Loggin in...')
+
         self.open_browser()
+        logger.debug('Navigating to %s...' % self.login_url)
         self.driver.get(self.login_url)
         assert "ING" in self.driver.title
 
@@ -52,12 +50,15 @@ class Plugin(Connector):
 
     #
     #
+    #
     #   Scraping of the credit card
     #
+    #   At this point multiple credit cards are not supported
     #
     #
     def scrape_ccard(self, account, datefrom):
         # Download credit card statement
+        logger.debug('Navigating to %s...', self.creditcard_url)
         self.driver.get(self.creditcard_url)
 
         transactions = []
@@ -66,6 +67,7 @@ class Plugin(Connector):
         while True:
             # get all the lines of the current period
             for tr in self.driver.find_elements_by_xpath("//div[@id='statementDetailTable']/div/div[@class='riaf-datatable-canvas']/table/tbody/tr[@class='riaf-datatable-contents ']"):
+                logger.debug('transaction:\n%s' % tr.text)
                 # Date of this transaction
                 line= {
                     'date' : datetime.strptime(tr.find_element_by_class_name("riaf-datatable-column-date").text,'%d-%m-%Y').date(),
@@ -74,6 +76,11 @@ class Plugin(Connector):
                 # Should we continue ?
                 if datefrom and line['date'] < datefrom:
                     return transactions
+
+                # Is this a reservation?
+                if tr.find_element_by_class_name("riaf-datatable-column-first").text == '*':
+                    line['reservation'] = True
+
 
                 # Initialize amount and transaction type
                 if tr.find_element_by_class_name("riaf-datatable-column-last").find_element_by_xpath('span').get_attribute("class") == 'riaf-datatable-icon-crdb-db' :
@@ -84,7 +91,13 @@ class Plugin(Connector):
                 else:
                     raise ValueError('No sign for transaction')
 
-                line['name'] = line['memo'] = tr.find_elements_by_class_name("riaf-datatable-column-text")[0].text
+                line['name'] = tr.find_elements_by_class_name("riaf-datatable-column-text")[0].text.encode('utf-8')
+
+                # Get the memo...
+                tr.click()
+                tr_details = tr.find_element_by_xpath("following-sibling::tr[@class='riaf-datatable-details-open']")
+                logger.debug('details row:\n %s' % tr_details.text)
+                line['memo'] = tr_details.find_elements_by_class_name("riaf-datatable-details-contents")[0].text.encode('utf-8')
 
                 transactions.append(line)
 
@@ -191,18 +204,16 @@ class Plugin(Connector):
             else:
                 raise ValueError('No sign for transaction')
 
-            #
-            # XXX We should do some name and memo beautifying here
-            #
-            print "descr: %s" % td_descr.text
-
-            m = re.match('(Naam:)?(.+)\n(.+)', td_descr.text)
-            line['name'] = m.group(2)
-            line['memo'] = td_descr.text
+            (line['name'], line['memo'], line['foreign'], line['payee']) = self.parse_td_descr(td_descr)
 
             transactions.append(line)
 
         return transactions
+
+    def parse_td_descr(self, td_descr):
+        text = td_descr.text.encode('utf-8')
+
+
 
     def logout(self):
         # keep the browser open for the development

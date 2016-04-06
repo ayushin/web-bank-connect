@@ -15,4 +15,4 @@ ra = moneydance.getRootAccount()
 ab = moneydance.getCurrentAccountBook()
 
 account = ra.makeAccount(ab, Account.AccountType.valueOf(account_type), ra)
-ab.notifyAccountAdded(ra, account)
+account.syncItem()

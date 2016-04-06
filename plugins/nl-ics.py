@@ -44,7 +44,9 @@ class Plugin(Connector):
         for element in self.driver.find_elements_by_class_name('statement-header'):
 
             if not element.is_displayed():
-                self.driver.find_element_by_class_name('show-more').click()
+                button = self.driver.find_elements_by_class_name('show-more')
+                if button:
+                    button[0].click()
 
             while not 'expanded' in element.get_attribute('class'):
                 element.click()
