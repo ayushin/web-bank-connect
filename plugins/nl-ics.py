@@ -6,6 +6,11 @@ Author: Alex Yushin <alexis@ww.net>
 
 """
 
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+
 from datetime import date, datetime
 
 from selenium.webdriver.support.ui import WebDriverWait
@@ -35,7 +40,7 @@ class Plugin(Connector):
 
     def scrape_ccard(self, account, datefrom = None):
         # Download credit card statement
-        print "Navigating to the credit card URL..."
+        logger.debug(("Navigating to the credit card %s..." % self.creditcard_url)
         self.driver.get(self.creditcard_url)
 
         transactions = []

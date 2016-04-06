@@ -15,4 +15,7 @@ ra = moneydance.getRootAccount()
 ab = moneydance.getCurrentAccountBook()
 
 account = ra.makeAccount(ab, Account.AccountType.valueOf(account_type), ra)
+account.setAccountName(account_name)
+account.setCreationDate(20120101)
+
 account.syncItem()

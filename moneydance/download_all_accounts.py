@@ -33,6 +33,11 @@ from datetime import date, datetime
 from com.infinitekind.moneydance.model import OnlineTxn
 from com.moneydance.apps.md.view.gui import MDAccountProxy
 
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+
 #
 #
 # 1. Sanity check and setup last downloaded transaction...
@@ -74,19 +79,29 @@ statements = scrape_all(CONNECTIONS)
 # 3. Post the transactions to MoneyDance
 #
 #
-today_long = long((datetime.utcnow().date() - date(1970, 1, 1)).total_seconds()*1000)
 
 for statement in statements:
-
     # Get the mdAccount to work with
     mdAccount = ra.getAccountByName(statement['account']['moneydance_name'])
     assert mdAccount
+
+    # Keep track of reserved transactions
+    date_last_update = date.today()
 
     # Get the downloadedTransactions list...
     downloadedTransactions = mdAccount.getDownloadedTxns()
 
     # Iterate through the transactions we scraped in (2) above
     for transaction in statement['transactions']:
+
+        # We do not add reservation, but
+        # If we have a reservation --  next time we should start our update from that date...
+        if transaction.get('reservation'):
+            logger.info('skipping reservation of %s on %s' % (transaction['amount'], transaction['date']))
+            if transaction['date'] < date_last_update:
+                date_last_update = transaction['date']
+            continue
+
         newTxn = downloadedTransactions.newTxn()
 
         newTxn.setDatePostedInt(int(transaction['date'].strftime("%Y%m%d")))
@@ -97,6 +112,7 @@ for statement in statements:
         newTxn.setTxnType(transaction['type'])
 
         downloadedTransactions.addNewTxn(newTxn)
+
 
     if statement.get('balance'):
         downloadedTransactions.setOnlineLedgerBalance(\
@@ -110,7 +126,7 @@ for statement in statements:
     # weekend for example: sale was done saturday, download was done saturday, transaction was reserved only,
     # sunday we downloaded transactions again, so the download date is sunday, but
     # then monday the saturday transaction was finalised but with the saturday's date
-    MDAccountProxy(mdAccount).setOFXLastTxnUpdate(today_long)
+    MDAccountProxy(mdAccount).setOFXLastTxnUpdate(long((date_last_update - date(1970, 1, 1)).total_seconds()*1000))
 
     # A little MoneyDance magic to get the transactions updated -- thank you Sean!
     moneydance.getUI().getOnlineManager().getDefaultUIProxy().receivedStatement(MDAccountProxy(mdAccount))

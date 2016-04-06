@@ -17,6 +17,7 @@ from selenium.common.exceptions import NoSuchElementException,TimeoutException,E
 
 from wbc.wbc import Connector
 
+from pprint import pformat
 import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -97,6 +98,8 @@ class Plugin(Connector):
                 tr.click()
                 tr_details = tr.find_element_by_xpath("following-sibling::tr[@class='riaf-datatable-details-open']")
                 logger.debug('details row:\n %s' % tr_details.text)
+
+                # XXX We could consider beautifying below...
                 line['memo'] = tr_details.find_elements_by_class_name("riaf-datatable-details-contents")[0].text.encode('utf-8')
 
                 transactions.append(line)
@@ -170,14 +173,13 @@ class Plugin(Connector):
 
     # Actually scrape the statement transactions
     def scrape_current(self, account, datefrom = None):
+
         self.expand_account(account, datefrom)
 
         transactions = []
 
         # Scrape the transactions
         for tr in self.driver.find_elements_by_xpath("//table[@id='receivedTransactions']/tbody/tr"):
-
-            print tr.text
 
             # Skip horizontal lines...
             if tr.find_elements_by_tag_name('hr'):
@@ -204,16 +206,31 @@ class Plugin(Connector):
             else:
                 raise ValueError('No sign for transaction')
 
-            (line['name'], line['memo'], line['foreign'], line['payee']) = self.parse_td_descr(td_descr)
+            self.parse_td_descr(td_descr, line)
 
+            logger.debug("appening transaction:\n%s" % pformat(line))
             transactions.append(line)
 
         return transactions
 
-    def parse_td_descr(self, td_descr):
-        text = td_descr.text.encode('utf-8')
+    def parse_td_descr(self, td_descr, line):
+        logger.debug("parsing transaction description:\n%s" % td_descr.text)
 
+        (line1, line2, all_data) = td_descr.find_elements_by_xpath('div')
+        line['name'] = line1.text.encode('utf-8').strip() + line2.text.encode('utf-8').strip()
+        line['memo'] = ""
 
+        for div in all_data.find_elements_by_xpath('div'):
+            div_class = div.get_attribute('class')
+
+            if div_class == 'clearfix':
+                line['memo'] += "\n"
+            elif 'l-w-30' in div_class:
+                line['memo'] += div.text.encode('utf-8').strip() + ': '
+            elif 'l-w-70' in div_class:
+                line['memo'] += div.text.encode('utf-8').strip()
+            else:
+                logger.debug('found an unexpected div %s in the transaction data - skipping' % div_class)
 
     def logout(self):
         # keep the browser open for the development
@@ -226,10 +243,10 @@ class Plugin(Connector):
     #
     def list_accounts(self):
         accounts = []
+        logger.info("Navigating to %s", self.accounts_url)
         self.driver.get(self.accounts_url)
 
         accounts_ol = self.driver.find_element_by_xpath("//div[@id='accounts']/div/div/ol")
-
         # Expand...
         while True:
             showMore = accounts_ol.find_element_by_id('accountslider')
@@ -240,22 +257,45 @@ class Plugin(Connector):
 
         # Get the list of current accounts
         for account_li in accounts_ol.find_elements_by_tag_name('li'):
-            print 'found %s - id %s' % (account_li.text, account_li.id)
+            logger.debug("found %s" % account_li.text)
+
             # We skip the "accountslider" and "totalBalance" items...
-            if account_li.get_attribute('id'):
+            if account_li.get_attribute('id') in ('accountslider', 'totalBalance'):
                 continue
 
             account_data = account_li.find_elements_by_xpath('a/div')
             account = {
                 'type'          :   'current',
-                'name'          :   account_data[1].text,
-                'owner'         :   account_data[0].text,
+                'name'          :   account_data[1].text.encode('utf-8'),
+                'owner'         :   account_data[0].text.encode('utf-8'),
                 'balance'       :   {
-                    'amount'    :   float(account_data[2].text.encode('utf-8').replace('.','').replace(',','.').replace('€ ','')),
-                    'date'      :   date.today()
+                    'amount'    :   float(account_data[2].text.encode('utf-8').replace('.', '').replace(',','.').replace('€ ','')),
+                    'date'      :   datetime.utcnow().date()
                 }
             }
 
             accounts.append(account)
+
+        # # Check if we have a credit card...
+        # logger.info("Navigating to %s", self.creditcard_url)
+        # self.driver.get(self.creditcard_url)
+        #
+        # self.driver.find_element_by_id('cards_selector').click()
+        #
+        # credit_cards_tbody = self.driver.find_element_by_xpath(
+        #     "//form[@id='cards_selector_form']/div/div/div/span/div/div/div[@class='riaf-popup']/div/table/tbody")
+        #
+        #
+        # account = {
+        #     'type'  : 'ccard',
+        #     'name'  : credit_cards_tbody.find_element_by_xpath("tr/td/div/span[@class='riaf-listrenderer-account--accountnumber']").text.encode('utf-8'),
+        #     'owner'  : credit_cards_tbody.find_element_by_xpath("tr/td/div/span[@class='riaf-listrenderer-account--accountname']").text.encode('utf-8'),
+        #     'balance': {
+        #         'amount'    : float(credit_cards_tbody.find_element_by_xpath("tr/td[@class='riaf-listrenderer-account--amount']").text.encode('utf-8').replace('.', '').replace(',','.').replace('€ ','')),
+        #         'date'      : datetime.utcnow().date()
+        #     }
+        #
+        # }
+        # accounts.append(account)
 
         return accounts
