@@ -101,6 +101,5 @@ class Plugin(Connector):
         # self.driver.find_element_by_id('s2id_selAccIdx').click()
 
 
-
     def logout(self):
         pass
