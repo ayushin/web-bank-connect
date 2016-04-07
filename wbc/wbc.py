@@ -9,11 +9,32 @@ from hashlib import md5
 import logging
 
 
+# Transaction types from OFX 2.1.1 specification...
+TRANSACTION_TYPES = (
+    'CREDIT',       # Generic credit
+    'DEBIT',        # Generic debit
+    'INT',          # Interest earned or paid
+    'DIV',          # Dividend
+    'FEE',          # FI fee
+    'SRVCHG',       # Service charge
+    'DEP',          # Deposit
+    'ATM',          # ATM debit or credit
+    'POS',          # Point of sale debit or credit
+    'XFER',         # Transfer
+    'CHECK',        # Check
+    'PAYMENT',      # Electronic payment
+    'CASH',         # Cash withdrawal
+    'DIRECTDEP',    # Direct deposit
+    'DIRECTDEBIT',  # Merchant initiated debit
+    'REPEATPMT',    # Repeating payment/standing order
+    'OTHER',        # Other
+)
+
 # Definition of web bank connector
 class Connector:
     def open_browser(self):
         self.driver = webdriver.Firefox()
-        self.driver.implicitly_wait(10)
+        self.driver.implicitly_wait(3)
 
     def login(self, username, password):
         pass

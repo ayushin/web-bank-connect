@@ -18,6 +18,7 @@ from selenium.common.exceptions import NoSuchElementException,TimeoutException,E
 from wbc.wbc import Connector
 
 from pprint import pformat
+
 import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
