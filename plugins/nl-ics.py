@@ -61,13 +61,16 @@ class Plugin(Connector):
                 if show_more[0].is_displayed():
                     show_more[0].click()
 
+            statement_id = statement_tr.get_attribute('id')
+            if statement_id != 'current':
+                logger.debug('statement date %s, datefrom %s' %((datetime.strptime(statement_id, '%Y%m') + timedelta(days=31)).date(), datefrom))
+                if (datetime.strptime(statement_id, '%Y%m') + timedelta(days=31)).date() < datefrom:
+                    break
+
             # Expand the statement to see its transactions...
             if not 'expanded' in statement_tr.get_attribute('class'):
                 statement_tr.click()
 
-            statement_id = statement_tr.get_attribute('id')
-            if statement_id != 'current' and (datetime.strptime(statement_id, '%Y%m') + timedelta(days=31)).date() < datefrom:
-                break
 
         for transaction_tr in self.driver.find_elements_by_css_selector("table tbody tr.transaction-row"):
             logger.debug('found transaction %s\n' % transaction_tr.text)
@@ -79,9 +82,11 @@ class Plugin(Connector):
             # Get the statement year...
             tr_class = transaction_tr.get_attribute('class')
             pos = tr_class.find('statement-')+10
-            year = int(tr_class[pos:pos+4])
+            year = tr_class[pos:pos+4]
             if year == 'curr':
                 year = int(datetime.utcnow().year)
+            else:
+                year = int(year)
 
             # ... and the date of the transaction...
             tr_date = transaction_tr.find_element_by_css_selector('td.col1').text.split()
@@ -90,7 +95,7 @@ class Plugin(Connector):
                 continue
 
             # special case... december in january statement
-            if int(tr_class[pos+5:pos+6]) == 1 and LOOKUP_MONTH.index(tr_date[1]) == 12:
+            if tr_class[pos+5:pos+6] == '01' and LOOKUP_MONTH.index(tr_date[1]) == 12:
                 year -= 1
 
             transaction_date = date(year, LOOKUP_MONTH.index(tr_date[1]), int(tr_date[0]))
