@@ -24,6 +24,12 @@ from selenium.webdriver.common.keys import Keys
 
 from time import sleep
 
+from pprint import pformat
+
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
 
 class Plugin(Connector):
     login_url = 'https://klient1.rb.cz/ebts/version_02/eng/banka3.html'
@@ -64,17 +70,88 @@ class Plugin(Connector):
 
         for account_option in self.driver.find_elements_by_css_selector('select[name="a_account"] option'):
             account_option.click()
-            account = {'name': account_option.text.encode('utf-8'),
-                       'type': 'current',
-                       'currency_list' : []
-                       }
+            WebDriverWait(self.driver, 3)
             for currency_option in self.driver.find_elements_by_css_selector('select[name="a_currency"] option'):
-                account['currency_list'].append(currency_option.text.encode('utf-8'))
-            accounts.append(account)
+                accounts.append({
+                    'name': account_option.text.encode('utf-8'),
+                    'type': 'current',
+                    'currency' : currency_option.text.encode('utf-8')
+                })
 
         return accounts
 
-    def choose_account(self, account):
+    def choose_account(self, account, currency):
         self.driver.switch_to.default_content()
         self.driver.switch_to.frame('Choice')
-        self.driver.find_element_by_css_selector()
+        for account_option in self.driver.find_elements_by_css_selector('select[name="a_account"] option'):
+            if account_option.text.encode('utf-8') == account:
+                account_option.click()
+                WebDriverWait(self.driver, 3)
+                for currency_option in self.driver.find_elements_by_css_selector('select[name="a_currency"] option'):
+                    if currency_option.text.encode('utf-8') == currency:
+                        currency_option.click()
+                        WebDriverWait(self.driver, 3)
+                        self.driver.switch_to.default_content()
+                        return
+        raise ValueError('Not found account %s currency %s' % (account, currency))
+
+
+    def scrape_current(self, account, datefrom, currency):
+        # Navigate to the correct account...
+        self.choose_account(account, currency)
+        self.driver.switch_to.default_content()
+        self.driver.switch_to.frame('MainMenu')
+
+        # Select account history, account movements
+        account_history = self.driver.find_element_by_css_selector('table tbody tr#MainMenu1')
+        account_history.click()
+        account_movements = self.driver.find_element_by_css_selector('table tbody td table#SubMenu1 tbody tr td table tbody tr td')
+        assert "Account movements" in account_movements.text.encode('utf-8')
+        account_movements.click()
+
+        # Switch back to the default frame
+        self.driver.switch_to.default_content()
+        self.driver.switch_to.frame('Main')
+
+        # XXX We should make sure we select -370 transaction in the filter
+
+        transactions = []
+        # Scrape the account...
+        while True:
+            for tr in self.driver.find_elements_by_css_selector('form[name="ListRealTr"] table tbody tr td table tbody tr'):
+                cols = tr.find_elements_by_css_selector('td font')
+                logger.debug('found statement line:\n%s' % tr.text)
+                if cols[0].text.encode('utf-8') == 'NO.\nNUMBER':
+                    continue
+
+                if  'TOTAL OF SELECTED CREDIT ITEMS' in cols[0].text.encode('utf-8'):
+                    return transactions
+
+                col = {'no': int(cols[0].text.encode('utf-8'))}
+
+                (col['date'], col['time'], col_dummy) = cols[1].get_attribute('innerHTML').encode('utf-8').split('<br>')
+                (col['note'], col['account_name'], col['account_number']) = cols[2].get_attribute('innerHTML').encode('utf-8').split('<br>')
+                (col['date_deducted'], col['value'], col['type'], col['code']) = cols[3].get_attribute('innerHTML').encode('utf-8').split('<br>')
+                (col['variable_symbol'], col['constant_symbol'], col['specific_symbol'])= cols[4].get_attribute('innerHTML').encode('utf-8').split('<br>')
+                col['amount'] = cols[5].text.encode('utf-8').split('\n')[0].replace(' ','').replace(',','.')
+                col['fee']  = cols[6].text.encode('utf-8').replace(' ','').replace(',','.')
+                col['exchange'] = cols[7].text.encode('utf-8').replace(' ','').replace(',','.')
+                col['message'] = cols[8].text.encode('utf-8')
+
+                line = {
+                    'date': datetime.strptime(col['date'],'%d.%m.%Y').date(),
+                    'name': col['note'] or col['account_name'] or col['account_number'],
+                    'memo': col['note'] + '\n' + col['account_name'] + '\n' + col['account_number'] + '\n'  + col['type'] + '\n' + col['variable_symbol'] + '/' + col['constant_symbol'] + '/' + col['specific_symbol'],
+                    'refnum': col['code']
+                }
+
+                if datefrom and line['date'] < datefrom:
+                    return transactions
+
+                # Figure out the transaction type
+                # Figure out amount or fee
+              #'amount' : float(tr.find_element_by_class_name("riaf-datatable-column-amount").text.replace('.','').replace(',','.'))}
+
+                transactions.append(line)
+
+            self.driver.find_element_by_css_selector('a[href="javascript:top.Common.v_SubList.Next(1);"]').click()
