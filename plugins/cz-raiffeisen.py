@@ -52,15 +52,17 @@ class Plugin(Connector):
         WebDriverWait(self.driver, 3).until(EC.alert_is_present())
         self.driver.switch_to.alert.accept()
 
-        # Get the auth code from the user and send it together with the 'pin'...
-        auth_code = input("Please enter the auth code:\n")
-        elem = self.driver.find_element_by_name("a_userpassword")
-        elem.send_keys(auth_code)
-        elem = self.driver.find_element_by_name("Pin")
-        elem.send_keys(password)
+        # # Get the auth code from the user and send it together with the 'pin'...
+        # auth_code = input("Please enter the auth code:\n")
+        # elem = self.driver.find_element_by_name("a_userpassword")
+        # elem.send_keys(auth_code)
+        # elem = self.driver.find_element_by_name("Pin")
+        # elem.send_keys(password)
+        #
+        # # Click OK to log in
+        # self.driver.find_element_by_name("b_ok_Button").click()
 
-        # Click OK to log in
-        self.driver.find_element_by_name("b_ok_Button").click()
+        sleep(30)
 
     def list_accounts(self):
         self.driver.switch_to.default_content()
@@ -132,7 +134,7 @@ class Plugin(Connector):
                 (col['date'], col['time'], col_dummy) = cols[1].get_attribute('innerHTML').encode('utf-8').split('<br>')
                 (col['note'], col['account_name'], col['account_number']) = cols[2].get_attribute('innerHTML').encode('utf-8').split('<br>')
                 (col['date_deducted'], col['value'], col['type'], col['code']) = cols[3].get_attribute('innerHTML').encode('utf-8').split('<br>')
-                (col['variable_symbol'], col['constant_symbol'], col['specific_symbol'])= cols[4].get_attribute('innerHTML').encode('utf-8').split('<br>')
+                (col['variable_symbol'], col['constant_symbol'], col['specific_symbol'])= cols[4].get_attribute('innerHTML').encode('utf-8').replace('&nbsp;','').split('<br>')
                 col['amount'] = cols[5].text.encode('utf-8').split('\n')[0].replace(' ','').replace(',','.')
                 col['fee']  = cols[6].text.encode('utf-8').replace(' ','').replace(',','.')
                 col['exchange'] = cols[7].text.encode('utf-8').replace(' ','').replace(',','.')
@@ -148,9 +150,44 @@ class Plugin(Connector):
                 if datefrom and line['date'] < datefrom:
                     return transactions
 
-                # Figure out the transaction type
-                # Figure out amount or fee
-              #'amount' : float(tr.find_element_by_class_name("riaf-datatable-column-amount").text.replace('.','').replace(',','.'))}
+                # XXX Figure out the transaction type
+
+                if col['amount']:
+                    line['amount'] = float(col['amount'])
+
+                    if line['amount'] > 0:
+                        line['type'] = 'CREDIT'
+                    else:
+                        line['type'] = 'DEBIT'
+
+                    if col['fee']:
+                        fee_line = {
+                            'type': 'SRVCHG',
+                            'date': line['date'],
+                            'name': 'Service charges',
+                            'memo': 'Service charges for transaction %s' % line['refnum'],
+                            'amount': float(col['fee'])
+                        }
+                        transactions.append(fee_line)
+
+                    if col['exchange']:
+                        exchange_line = {
+                            'type': 'SRVCHG',
+                            'date': line['date'],
+                            'name': 'Exchange fees',
+                            'memo': 'Exchange fees for transaction %s' % line['refnum'],
+                            'amount': float(col['exchange'])
+                        }
+                        transactions.append(exchange_line)
+                else:
+                    if col['fee']:
+                        line['type'] = 'SRVCHG'
+                        line['amount'] = float(col['fee'])
+                    elif col['exchange']:
+                        line['type'] = 'SRVCHG'
+                        line['amount'] = float(col['exchange'])
+                    else:
+                        raise ValueError('No amount neither service charge')
 
                 transactions.append(line)
 
