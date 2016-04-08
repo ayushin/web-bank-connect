@@ -58,7 +58,7 @@ class Plugin(Connector):
     #   At this point multiple credit cards are not supported
     #
     #
-    def scrape_ccard(self, account, datefrom):
+    def scrape_ccard(self, account, datefrom, currency=None):
         # Download credit card statement
         logger.debug('Navigating to %s...', self.creditcard_url)
         self.driver.get(self.creditcard_url)
@@ -173,7 +173,7 @@ class Plugin(Connector):
                 return
 
     # Actually scrape the statement transactions
-    def scrape_current(self, account, datefrom = None):
+    def scrape_current(self, account, datefrom = None, currency=None):
 
         self.expand_account(account, datefrom)
 

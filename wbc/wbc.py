@@ -34,7 +34,7 @@ TRANSACTION_TYPES = (
 class Connector:
     def open_browser(self):
         self.driver = webdriver.Firefox()
-        self.driver.implicitly_wait(3)
+        #self.driver.implicitly_wait(3)
 
     def login(self, username, password):
         pass

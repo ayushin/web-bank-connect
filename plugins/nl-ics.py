@@ -41,7 +41,7 @@ class Plugin(Connector):
         self.driver.find_element_by_link_text('Mijn ICS')
 
 
-    def scrape_ccard(self, account, datefrom = None):
+    def scrape_ccard(self, account, datefrom = None, currency = None):
         LOOKUP_MONTH = (None, 'jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec')
 
         # Download credit card statement
