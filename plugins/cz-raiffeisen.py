@@ -44,8 +44,7 @@ class Plugin(Connector):
         # Open the certification prompt box and accept it...
         self.driver.find_element_by_name("b_authcode_Button").click()
         WebDriverWait(self.driver, 3).until(EC.alert_is_present())
-        alert = self.driver.switch_to_alert()
-        alert.accept()
+        self.driver.switch_to.alert.accept()
 
         # Get the auth code from the user and send it together with the 'pin'...
         auth_code = input("Please enter the auth code:\n")
@@ -57,3 +56,25 @@ class Plugin(Connector):
         # Click OK to log in
         self.driver.find_element_by_name("b_ok_Button").click()
 
+    def list_accounts(self):
+        self.driver.switch_to.default_content()
+        self.driver.switch_to.frame('Choice')
+
+        accounts = []
+
+        for account_option in self.driver.find_elements_by_css_selector('select[name="a_account"] option'):
+            account_option.click()
+            account = {'name': account_option.text.encode('utf-8'),
+                       'type': 'current',
+                       'currency_list' : []
+                       }
+            for currency_option in self.driver.find_elements_by_css_selector('select[name="a_currency"] option'):
+                account['currency_list'].append(currency_option.text.encode('utf-8'))
+            accounts.append(account)
+
+        return accounts
+
+    def choose_account(self, account):
+        self.driver.switch_to.default_content()
+        self.driver.switch_to.frame('Choice')
+        self.driver.find_element_by_css_selector()
