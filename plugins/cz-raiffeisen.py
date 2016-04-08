@@ -34,6 +34,10 @@ logger.setLevel(logging.DEBUG)
 class Plugin(Connector):
     login_url = 'https://klient1.rb.cz/ebts/version_02/eng/banka3.html'
 
+    def logout(self):
+        pass
+
+
     def login(self, username, password):
         self.open_browser()
         self.driver.get(self.login_url)
@@ -138,7 +142,7 @@ class Plugin(Connector):
                 col['amount'] = cols[5].text.encode('utf-8').split('\n')[0].replace(' ','').replace(',','.')
                 col['fee']  = cols[6].text.encode('utf-8').replace(' ','').replace(',','.')
                 col['exchange'] = cols[7].text.encode('utf-8').replace(' ','').replace(',','.')
-                col['message'] = cols[8].text.encode('utf-8')
+                col['message'] = cols[8].text.encode('utf-8').replace(' ','').replace(',','.')
 
                 line = {
                     'date': datetime.strptime(col['date'],'%d.%m.%Y').date(),
@@ -179,6 +183,17 @@ class Plugin(Connector):
                             'amount': float(col['exchange'])
                         }
                         transactions.append(exchange_line)
+
+                    if col['message']:
+                        message_line = {
+                            'type': 'SRVCHG',
+                            'date': line['date'],
+                            'name': 'Operational fees',
+                            'memo': 'Operational fees for transaction %s' % line['refnum'],
+                            'amount': float(col['message'])
+                        }
+                        transactions.append(message_line)
+
                 else:
                     if col['fee']:
                         line['type'] = 'SRVCHG'
@@ -186,6 +201,9 @@ class Plugin(Connector):
                     elif col['exchange']:
                         line['type'] = 'SRVCHG'
                         line['amount'] = float(col['exchange'])
+                    elif col['message']:
+                        line['type'] = 'SRVCHG'
+                        line['amount'] = float(col['message'])
                     else:
                         raise ValueError('No amount neither service charge')
 
