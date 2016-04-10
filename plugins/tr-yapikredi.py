@@ -57,6 +57,9 @@ class Plugin(Connector):
 
         assert 'Kredi' in self.driver.title
 
+        # Should replace this with web-driver wait
+        sleep(3)
+
 
 
 
@@ -88,17 +91,30 @@ class Plugin(Connector):
 
         return accounts
 
-    def scrape_current(self, account, datefrom):
-        logger.debug('Navigating to account movements..')
-        # Home page...
-        #self.driver.find_element_by_xpath("//div[@id='main-nav']/ul/li/a").click()
-        # Default account...
-        self.driver.find_element_by_xpath("//div[@id='boxData0_0']/div/div/a/img").click()
-        #
-        self.driver.find_element_by_xpath("//table[@class='dataTable']/tbody/tr/td/div/h1[@title='Current Account USD']").click()
-        self.driver.find_element_by_link_text('Account Movements').click()
+    def scrape_current(self, account, datefrom, currency=None):
+        logger.debug('Navigating to the account movements..')
 
-        # self.driver.find_element_by_id('s2id_selAccIdx').click()
+        if not datefrom:
+            datefrom = date(2010,1,1)
+
+        self.driver.find_element_by_link_text("MY ACCOUNTS").click()
+        self.driver.find_element_by_link_text("My Current Accounts").click()
+        self.driver.find_element_by_css_selector("table tbody td div.module-account h1[title='" + account + "']").click()
+        self.driver.find_element_by_link_text('Account Movements').click()
+        self.driver.find_element_by_link_text('Detailed Search').click()
+        self.driver.find_element_by_id('startDate').send_keys(datefrom.strftime('%d/%d/%Y'))
+        self.driver.find_element_by_id('btnList').click()
+
+        for tr in self.driver.find_elements_by_css_selector('div.table-wrapper table tbody tr'):
+            # Get the row of td elements...
+            td = tr.find_elements_by_tag_name('td')
+
+            # If we reached the last line.. Get more
+            if 'getMore_row' in td[0].get_attribute('class'):
+                td[0].find_element_by_id('btnGetMore').click()
+                continue
+
+                logger.debug('transaction: %s' % tr.text)
 
 
     def logout(self):
