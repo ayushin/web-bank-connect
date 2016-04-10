@@ -1,14 +1,15 @@
 #
 #
 # A sample script that downloads the list of the accounts for each connection
-# configured in config.py
+# configured in config_local.py
 #
 
 
-from config import *
+import logging
+
+from config.config_local import *
 from wbc.wbc import load_plugin
 
-import logging
 logging.basicConfig()
 
 for connection in CONNECTIONS:

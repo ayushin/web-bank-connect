@@ -1,5 +1,5 @@
 # Local harcoded settings & credentials
-config.py
+config/[a-z]*.py
 
 # Test scripts
 test/*

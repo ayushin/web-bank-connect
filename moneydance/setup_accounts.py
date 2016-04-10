@@ -26,13 +26,8 @@ sys.path.append(SELENIUM_DIR)
 FIREFOX_PATH='/Applications/Firefox.app/Contents/MacOS'
 os.environ['PATH'] = FIREFOX_PATH
 
-from config import CONNECTIONS
+from config.config_local import CONNECTIONS
 from wbc.wbc import load_plugin
-
-from datetime import date, datetime
-
-from com.infinitekind.moneydance.model import OnlineTxn
-from com.moneydance.apps.md.view.gui import MDAccountProxy
 
 
 

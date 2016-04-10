@@ -25,7 +25,7 @@ sys.path.append(SELENIUM_DIR)
 FIREFOX_PATH='/Applications/Firefox.app/Contents/MacOS'
 os.environ['PATH'] = FIREFOX_PATH
 
-from config import CONNECTIONS
+from config.config_local import CONNECTIONS
 
 from datetime import date, datetime
 
