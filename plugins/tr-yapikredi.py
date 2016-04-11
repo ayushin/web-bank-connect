@@ -33,10 +33,6 @@ from selenium.webdriver.common.keys import Keys
 
 from time import sleep
 
-ENCODING='utf-8'
-def get_text(element):
-    return element.text.encode(ENCODING)
-
 class Plugin(Connector):
     LOGIN_URL = 'https://internetsube.yapikredi.com.tr/ngi/index.do?lang=en'
     CLICK_TIMEOUT = 3
@@ -113,11 +109,13 @@ class Plugin(Connector):
         self.wait_and_click("My Current Accounts")
         sleep(1)
 
-        self.driver.find_element_by_xpath("//div[@class='table-wrapper']/table/tbody/tr/td/div[@class='module-account']/h1[@title='"
-                                          + account + "']/../../..").click()
+        self.driver.find_element_by_xpath(
+            "//div[@class='table-wrapper']/table/tbody/tr/td/div[@class='module-account']"
+            + "/h1[@title='" + account + "']/../../..").click()
 
         self.wait_and_click('Account Movements')
         self.wait_and_click('Detailed Search')
+
         startDate = self.driver.find_element_by_id('startDate')
         startDate.clear()
         startDate.send_keys(datefrom.strftime("%d/%m/%Y"))
@@ -153,7 +151,6 @@ class Plugin(Connector):
 
         # The amount regular expression...
         amount_p = re.compile('([-+,.\d]+)\s(\w{2,3})')
-        # self.driver.implicitly_wait(0)
 
         for tr in self.driver.find_elements_by_css_selector('div.table-wrapper table tbody tr'):
             td = tr.find_elements_by_tag_name('td')
@@ -167,7 +164,7 @@ class Plugin(Connector):
                 'date': datetime.strptime(td[1].text.encode('utf-8'), '%d/%m/%Y'),
                 'name': td[4].text,
                 'memo': td[4].text,
-                'amount': float(amount_p.match(td[5].text.encode('utf-8')).group(1).replace('.','').replace(',','')),
+                'amount': float(amount_p.match(td[5].text.encode('utf-8')).group(1).replace('.','').replace(',','.')),
             }
             if(line['amount'] > 0):
                 line['type'] = 'CREDIT'
