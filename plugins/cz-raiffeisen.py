@@ -103,6 +103,7 @@ class Plugin(Connector):
 
 
     def scrape_current(self, account, datefrom, currency):
+
         # Navigate to the correct account...
         self.choose_account(account, currency)
         self.driver.switch_to.default_content()
@@ -122,6 +123,7 @@ class Plugin(Connector):
         # XXX We should make sure we select -370 transaction in the filter
 
         transactions = []
+
         # Scrape the account...
         while True:
             for tr in self.driver.find_elements_by_css_selector('form[name="ListRealTr"] table tbody tr td table tbody tr'):
@@ -170,7 +172,8 @@ class Plugin(Connector):
                             'date': line['date'],
                             'name': 'Service charges',
                             'memo': 'Service charges for transaction %s' % line['refnum'],
-                            'amount': float(col['fee'])
+                            'amount': float(col['fee']),
+                            'refnum': line['refnum'] + 'f'
                         }
                         transactions.append(fee_line)
 
@@ -180,7 +183,8 @@ class Plugin(Connector):
                             'date': line['date'],
                             'name': 'Exchange fees',
                             'memo': 'Exchange fees for transaction %s' % line['refnum'],
-                            'amount': float(col['exchange'])
+                            'amount': float(col['exchange']),
+                            'refnum': line['refnum'] + 'e'
                         }
                         transactions.append(exchange_line)
 
@@ -190,7 +194,8 @@ class Plugin(Connector):
                             'date': line['date'],
                             'name': 'Operational fees',
                             'memo': 'Operational fees for transaction %s' % line['refnum'],
-                            'amount': float(col['message'])
+                            'amount': float(col['message']),
+                            'refnum': line['refnum'] + 'm'
                         }
                         transactions.append(message_line)
 

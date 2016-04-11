@@ -5,9 +5,16 @@
 #
 
 from selenium import webdriver
-from hashlib import md5
-import logging
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
 
+
+from datetime import date
+from hashlib import md5
+
+import logging
+logger = logging.getLogger(__name__)
 
 # Transaction types from OFX 2.1.1 specification...
 TRANSACTION_TYPES = (
@@ -34,6 +41,8 @@ TRANSACTION_TYPES = (
 class Connector:
     def open_browser(self):
         self.driver = webdriver.Firefox()
+
+        # XXX implicitly_wait is plugin dependent...
         #self.driver.implicitly_wait(3)
 
     def login(self, username, password):
@@ -52,6 +61,14 @@ class Connector:
     def close_browser(self):
         self.driver.quit()
 
+    # def wait_and_find_link_text(self, link_text):
+    #     return WebDriverWait(self.driver, self.CLICK_TIMEOUT).until(
+    #         EC.presence_of_element_located((By.LINK_TEXT, link_text)))
+    #
+    # def wait_and_find_css_selector(self, selector_text):
+    #     return WebDriverWait(self.driver, self.CLICK_TIMEOUT).until(
+    #         EC.presence_of_element_located((By.CSS_SELECTOR, selector_text)))
+
 def load_plugin(plugin_name):
     plugin  = 'plugins.' + plugin_name + '.Plugin'
     parts = plugin.split('.')
@@ -61,8 +78,6 @@ def load_plugin(plugin_name):
         m = getattr(m, comp)
     return m()
 
-#
-#
 #
 # transaction = { 'date'        : '2016-01-01',
 #                'name'         : 'name or payee',
@@ -88,8 +103,9 @@ def generate_refnums(transactions):
         if transaction.get('refnum'):
             continue
 
-        trnhash = md5(str(transaction['date'])+transaction['name']+transaction['memo']+
-                    transaction['type']+str(transaction['amount'])).hexdigest()
+        trnhash = md5(str(transaction['date'])+transaction['name'].encode('utf-8') +
+                      transaction['memo'].encode('utf-8') + transaction['type'] +
+                      str(transaction['amount'])).hexdigest()
 
         if trnhash in duplicates.keys():
             duplicates[trnhash] += 1
@@ -113,7 +129,7 @@ def scrape_all(connections):
 
         for account in connection['accounts']:
             transactions = getattr(plugin, 'scrape_' + account['type'])(account = account['name'],
-                                        datefrom = account.get('lastupdate', None),
+                                        datefrom = account.get('lastupdate', date(1977,3,3)),
                                         currency = account.get('currency', None))
 
             generate_refnums(transactions)
