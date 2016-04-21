@@ -145,7 +145,7 @@ class Plugin(Connector):
                 getMoreRow[0].click()
                 while self.driver.find_elements_by_id(element_id):
                     sleep(1)
-                sleep(1)
+                sleep(5) # Should check Please wait longer mesage.
             else:
                 break
 
