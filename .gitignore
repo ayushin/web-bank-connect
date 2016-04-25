@@ -1,9 +1,8 @@
 # Local harcoded settings & credentials
-config/[a-z]*.py
+/local/*
 
 # Test scripts
 test/*
-
 .idea
 
 # Byte-compiled / optimized / DLL files
