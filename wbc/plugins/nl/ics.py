@@ -25,6 +25,7 @@ from wbc.models import Statement, Transaction, transactionType
 from pprint import pformat
 
 class Plugin(Plugin):
+    CLICK_SLEEP = 1
     CLICK_TIMEOUT = 10
     LOGIN_TIMEOUT = 30
     LOGIN_URL = 'https://www.icscards.nl/ics/login'
@@ -48,13 +49,12 @@ class Plugin(Plugin):
 
         self.logged_in = True
 
-
     def download_ccard(self, account):
         assert account.type == 'ccard'
 
         LOOKUP_MONTH = (None, 'jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec')
 
-        account.statement = getattr(account, 'statement', Statement())
+        statement = Statement()
 
         # Download credit card statement
         logger.debug("Navigating to the credit card %s..." % self.CREDITCARD_URL)
@@ -67,7 +67,7 @@ class Plugin(Plugin):
             logger.debug('found statement line:\n %s' % statement_tr.text)
 
             # Show more statements...
-            if 'rowhide'in statement_tr.get_attribute('class'):
+            if 'rowhide' in statement_tr.get_attribute('class'):
                 show_more = self.driver.find_elements_by_css_selector('tr.show-more')
                 if show_more[0].is_displayed():
                     show_more[0].click()
@@ -81,7 +81,7 @@ class Plugin(Plugin):
             # Expand the statement to see its transactions...
             if not 'expanded' in statement_tr.get_attribute('class'):
                 statement_tr.click()
-                sleep(1)
+                sleep(self.CLICK_SLEEP)
 
             for tr in WebDriverWait(self.driver, self.CLICK_TIMEOUT).until(
                     EC.presence_of_all_elements_located((By.CSS_SELECTOR,
@@ -92,7 +92,7 @@ class Plugin(Plugin):
                 logger.debug('found transaction row %s\n' % tr.text)
 
                 # Skip months with no transactions...
-                if 'no-transactions' in tr.find_element_by_tag_name('td').get_attribute('class'):
+                if tr.find_elements_by_css_selector('td.no-transactions'):
                     continue
 
                 # Get the statement year...
@@ -127,7 +127,8 @@ class Plugin(Plugin):
                     amount = float(tr.find_element_by_css_selector("td div span.amount").text.replace('.','').replace(',','.'))
                 )
 
-                transaction.memo = transaction.name + ' ' + tr.find_element_by_css_selector('td.foreign').text
+
+                transaction.memo = (transaction.name + ' ' + tr.find_element_by_css_selector('td.foreign').text).strip()
 
                 # Mark reservations as such...
                 if 'Gereserveerd' in tr.find_element_by_css_selector("td.foreign span.popover").text:
@@ -144,16 +145,14 @@ class Plugin(Plugin):
 
                 # Are we done?
                 if account.last_download and transaction.date < account.last_download.date():
-                    account.statement.generate_txn_ids()
-                    return account.statement
+                    return statement.finalize()
 
-                account.statement.transactions.append(transaction)
+                statement.transactions.append(transaction)
 
             # Collapse when done...
             statement_tr.click()
 
-        account.statement.generate_txn_ids()
-        return account.statement
+        return statement.finalize()
 
     def logout(self):
         pass
