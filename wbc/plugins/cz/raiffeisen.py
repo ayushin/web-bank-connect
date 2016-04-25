@@ -60,8 +60,11 @@ class Plugin(Plugin):
         WebDriverWait(self.driver, self.CLICK_WAIT).until(EC.alert_is_present())
         self.driver.switch_to.alert.accept()
 
-        # # Get the auth code from the user and send it together with the 'pin'...
-        auth_code = input("Please enter the auth code:\n")
+        # Get the auth code from the user and send it together with the 'pin'...
+        auth_code = ''
+        while not re.match('\d{11}', auth_code):
+            auth_code = self.user_input_method("Please enter the 11 digit auth code without dashes:\n")
+
         elem = self.driver.find_element_by_name("a_userpassword")
         elem.send_keys(auth_code)
         elem = self.driver.find_element_by_name("Pin")
@@ -216,13 +219,13 @@ class Plugin(Plugin):
                         ))
                 else:
                     if col['fee']:
-                        transaction.type    = transactionType.SRVCHG,
+                        transaction.type    = transactionType.SRVCHG
                         transaction.amount  = float(col['fee'])
                     elif col['exchange']:
-                        transaction.type    = transactionType.SRVCHG,
+                        transaction.type    = transactionType.SRVCHG
                         transaction.amount  = float(col['exchange'])
                     elif col['message']:
-                        transaction.type    = transactionType.SRVCHG,
+                        transaction.type    = transactionType.SRVCHG
                         transaction.amount  = float(col['message'])
                     else:
                         raise ValueError('No amount neither service charge')

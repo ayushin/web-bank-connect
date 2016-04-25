@@ -24,6 +24,7 @@ def load_plugin(plugin_name):
 # Definition of web bank connector
 class Plugin(object):
     logged_in = False
+    user_input_method = raw_input
 
     def open_browser(self):
         """

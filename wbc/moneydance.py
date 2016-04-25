@@ -11,6 +11,7 @@ This module will only work when called from inside of the Moneydance python cons
 from datetime import date, datetime, timedelta
 
 from com.moneydance.apps.md.view.gui import MDAccountProxy
+from javax.swing import JOptionPane
 
 import logging
 logger = logging.getLogger(__name__)
@@ -125,6 +126,10 @@ def download_transactions(connection, ra, moneydance):
             MDAccountProxy(account.md_account))
 
 
+def input_dialog(message):
+    return JOptionPane.showInputDialog(None, message, "User action required", JOptionPane.QUESTION_MESSAGE)
+
 def download_all_transactions(connections, ra, moneydance, config = {}):
     for connection in connections:
+        connection.plugin.user_input_method = input_dialog
         download_transactions(connection = connection, ra = ra, moneydance = moneydance)

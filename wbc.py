@@ -24,7 +24,10 @@ def find_connection_by_name(connection_name, connections):
     raise ValueError('could not find connection %s in configuration' % connection_name)
 
 if args.command == 'login':
-    find_connection_by_name(args.connection, CONNECTIONS).login()
+    if args.connection:
+        find_connection_by_name(args.connection, CONNECTIONS).login()
+    else:
+        raise argparse.ArgumentError(args.connection, "login command requires connection name")
 
 elif args.command == 'download':
     if args.connection:
