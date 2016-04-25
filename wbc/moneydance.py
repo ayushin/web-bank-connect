@@ -53,17 +53,24 @@ def download_transactions(connection, ra, moneydance):
 
         logger.info('last download for this account was on %s' % account.last_download)
 
+        # Check if we should download this account again...
+        # if timedelta(utcnow - account.last_download) < download_min_period
+        #      account account...
+        #
+
     #
     # 2. Download the transactions with the plug-in
     #
-    statements = connection.download_all_transactions()
+    statements = connection.download_statements()
 
     #
     #
     # 3. Post the transactions to MoneyDance
     #
     #
-    for account in connection.accounts:
+    for statement in statements:
+        account = statement.account
+
         # Keep track of reserved transactions
         last_download = datetime.utcnow()
 
@@ -71,7 +78,7 @@ def download_transactions(connection, ra, moneydance):
         downloadedTransactions = account.md_account.getDownloadedTxns()
 
         # Iterate through the transactions we scraped in (2) above
-        for transaction in account.statement.transactions:
+        for transaction in statement.transactions:
             # We do not add reservation, but
             # If we have a reservation --  next time we should start our update from that date...
             if transaction.reservation:
@@ -88,18 +95,17 @@ def download_transactions(connection, ra, moneydance):
             newTxn.setMemo(transaction.memo)
             if transaction.refnum:
                 newTxn.setRefNum(transaction.refnum)
-            newTxn.setFITxnId(transaction.fi_txn_id)
+            newTxn.setFITxnId(transaction.fitid)
 
             newTxn.setAmount(account.md_account.getCurrencyType().parse(str(transaction.amount), '.'))
             newTxn.setTxnType(transaction.type)
 
             downloadedTransactions.addNewTxn(newTxn)
 
-
-        if account.statement.closing_balance:
+        if statement.closing_balance:
             downloadedTransactions.setOnlineLedgerBalance(\
-                account.getCurrencyType().parse(str(account.statement.closing_balance.amount), '.'),
-                    long((account.statement.closing_balance.date - date(1970, 1, 1)).total_seconds()*1000))
+                account.getCurrencyType().parse(str(statement.closing_balance.amount), '.'),
+                    long((statement.closing_balance.date - date(1970, 1, 1)).total_seconds()*1000))
 
         # Update the last download date...
         #
