@@ -122,20 +122,22 @@ class Connection(object):
             accounts = self.accounts
         assert accounts
 
-        self.login()
-
         for account in accounts:
             if account.active:
+                # login() handles multiple calls without re-logging in...
+                self.login()
                 statement = getattr(self.plugin, 'download_' + account.type)(account)
                 if statement:
                     statement.account = account
                     statements.append(statement)
 
-        # self.plugin.logout()
+        # self.logout()
 
         return statements
 
-
+    def logout(self):
+        if self.plugin.logged_in:
+            self.plugin.logout()
 
     def list_accounts(self):
         """

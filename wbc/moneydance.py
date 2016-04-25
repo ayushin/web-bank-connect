@@ -8,7 +8,7 @@ This module will only work when called from inside of the Moneydance python cons
 
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from com.moneydance.apps.md.view.gui import MDAccountProxy
 
@@ -27,6 +27,9 @@ def download_transactions(connection, ra, moneydance):
     :param connection: Connection to download the transactions from.
     :return:    An array of statements with all the dow
     """
+
+    # XXX Should be a globally configured paramater
+    download_interval = timedelta(hours = 1)
 
     #
     # 1. Verify the configuration and find out the last_download date and time per account
@@ -54,9 +57,10 @@ def download_transactions(connection, ra, moneydance):
         logger.info('last download for this account was on %s' % account.last_download)
 
         # Check if we should download this account again...
-        # if timedelta(utcnow - account.last_download) < download_min_period
-        #      account account...
-        #
+        if download_interval:
+            if datetime.utcnow() - account.last_download < download_interval:
+                logger.info('too early to download %s - skipping' % account.name)
+                account.active = False
 
     #
     # 2. Download the transactions with the plug-in
