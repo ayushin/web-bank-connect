@@ -25,7 +25,7 @@ from time import sleep
 
 import logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 
 class Plugin(Plugin):
@@ -92,66 +92,49 @@ class Plugin(Plugin):
 
         return accounts
 
-    def choose_account(self, account):
-        """
-        A helper function to select an account specified by 'account' and 'currency' pair
-
-        :return: None
-        """
-        self.driver.switch_to.default_content()
-        self.driver.switch_to.frame('Choice')
-
-        for account_option in self.locate_all(
-                (By.CSS_SELECTOR, 'select[name="a_account"] option')):
-            if account_option.text == account.name:
-                account_option.click()
-                sleep(self.CLICK_SLEEP)
-                for currency_option in self.locate_all(
-                        (By.CSS_SELECTOR, 'select[name="a_currency"] option')):
-                    if currency_option.text == account.currency:
-                        currency_option.click()
-                        sleep(self.CLICK_SLEEP)
-                        self.driver.switch_to.default_content()
-                        return
-
-        raise ValueError('No account named %s in %s currency found' % (account.name, account.currency))
 
 
     def download_current(self, account):
-
-        # Navigate to the correct account...
-        self.choose_account(account)
+        # Choose the specified account...
         self.driver.switch_to.default_content()
-        self.driver.switch_to.frame('MainMenu')
+        self.driver.switch_to.frame('Choice')
+        # try
+        self.locate((By.XPATH, "//select[@name='a_account']/option[contains(.,'" + account.name + "')]")).click()
+        sleep(self.CLICK_SLEEP)
+        self.locate((By.XPATH, "//select[@name='a_currency']/option[contains(.,'" + account.currency + "')]")).click()
+        sleep(self.CLICK_SLEEP)
+        #raise ValueError('No account named %s in %s currency found' % (account.name, account.currency))
 
         # Select account history, account movements
-        self.locate((By.CSS_SELECTOR, 'table tbody tr#MainMenu1')).click()
-
-        # XXX
-        self.locate((By.LINK_TEXT, 'Account movements')).click()
-        # element = self.locate((By.CSS_SELECTOR, 'table tbody td table#SubMenu1 tbody tr td table tbody tr td'))
-        # assert "Account movements" in element.text
-        # element.click()
+        self.driver.switch_to.default_content()
+        self.driver.switch_to.frame('MainMenu')
+        self.locate((By.XPATH, u"//td[@class='MainMenu'][contains(., 'ACCOUNT\u00A0HISTORY')]")).click()
+        self.locate((By.XPATH, u"//td[@class='submenu_low'][contains(., 'Account movements')]")).click()
+        sleep(self.CLICK_SLEEP)
 
         # Switch back to the default frame
         self.driver.switch_to.default_content()
         self.driver.switch_to.frame('Main')
 
         # XXX We should make sure we select -370 transaction in the filter
-
-        statement = Statement()
+        statement = Statement(account = account)
 
         # Known transaction types...
         transaction_types = {
             'Card payment'              :   transactionType.PAYMENT,
             'Enter transfer'            :   transactionType.XFER,
-            'Card issue fee'            :   transactionType.SRVCHG,
+            'Card issue fee'            :   transactionType.FEE,
             'Repeating transfer'        :   transactionType.REPEATPMT,
             'Withdraw from ATM'         :   transactionType.ATM,
             'Outgoing payment'          :   transactionType.XFER,
             'Enter reverse transfer'    :   transactionType.DIRECTDEBIT,
-            'Cash deposit'              :   transactionType.CASH,
-            'Administration of current account' :   transactionType.SRVCHG
+            'Cash deposit'              :   transactionType.DEP,
+            'Administration of current account' :   transactionType.SRVCHG,
+            'Withholding tax on interest'   : transactionType.OTHER,
+            'Cash withdrawal'           : transactionType.CASH,
+            'Currency conversion'       : transactionType.SRVCHG,
+            'ATM withdrawal while abroad': transactionType.ATM,
+            'Outgoing SEPA payment':    transactionType.PAYMENT
         }
 
         # Scrape the account...
@@ -214,7 +197,7 @@ class Plugin(Plugin):
                             transaction.type = transactionType.CREDIT
                         else:
                             transaction.type = transactionType.DEBIT
-                            logger.notice('found unknown transaction type %s, using generic debit' % col['type'])
+                            logger.warning('found unknown transaction type %s, using generic debit' % col['type'])
 
                     if col['fee']:
                         statement.transactions.append(Transaction(
@@ -260,5 +243,5 @@ class Plugin(Plugin):
 
                 statement.transactions.append(transaction)
 
-            self.locale((By.CSS_SELECTOR, 'a[href="javascript:top.Common.v_SubList.Next(1);"]')).click()
+            self.locate((By.CSS_SELECTOR, 'a[href="javascript:top.Common.v_SubList.Next(1);"]')).click()
             sleep(self.CLICK_SLEEP)
