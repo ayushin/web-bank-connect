@@ -25,9 +25,6 @@ from wbc.models import Statement, Transaction, transactionType
 from pprint import pformat
 
 class Plugin(Plugin):
-    CLICK_SLEEP = 1
-    CLICK_TIMEOUT = 10
-    LOGIN_TIMEOUT = 30
     LOGIN_URL = 'https://www.icscards.nl/ics/login'
     CREDITCARD_URL = 'https://www.icscards.nl/ics/mijn/accountoverview'
 
@@ -36,16 +33,11 @@ class Plugin(Plugin):
         self.driver.get(self.LOGIN_URL)
 
 #        self.driver.find_element_by_link_text('Accepteren').click()
-        self.driver.find_element_by_id("trcAccept").click()
-
-        elem = self.driver.find_element_by_id("username")
-        elem.send_keys(username)
-        elem = self.driver.find_element_by_id("password")
-        elem.send_keys(password)
-
-        self.driver.find_element_by_id("button-login").click()
-        WebDriverWait(self.driver, self.LOGIN_TIMEOUT).until(
-            EC.presence_of_element_located((By.LINK_TEXT, 'Mijn ICS')))
+        self.locate((By.ID, "trcAccept")).click()
+        self.locate((By.ID, "username")).send_keys(username)
+        self.locate((By.ID, "password")).send_keys(password)
+        self.locate((By.ID, "button-login")).click()
+        self.locate((By.LINK_TEXT,'Mijn ICS'), wait = self.LOGIN_TIMEOUT)
 
         self.logged_in = True
 
@@ -63,12 +55,12 @@ class Plugin(Plugin):
         # ICS gives us all the available statements at once, just not all of them are visible...
 
         # XXX For some reason the last element is stale...
-        for statement_tr in self.driver.find_elements_by_css_selector('table tbody tr.statement-header')[:-1]:
+        for statement_tr in self.locate_all((By.CSS_SELECTOR, 'table tbody tr.statement-header'))[:-1]:
             logger.debug('found statement line:\n %s' % statement_tr.text)
 
             # Show more statements...
             if 'rowhide' in statement_tr.get_attribute('class'):
-                show_more = self.driver.find_elements_by_css_selector('tr.show-more')
+                show_more = self.locate_all((By.CSS_SELECTOR, 'tr.show-more'))
                 if show_more[0].is_displayed():
                     show_more[0].click()
 
@@ -82,12 +74,11 @@ class Plugin(Plugin):
             if not 'expanded' in statement_tr.get_attribute('class'):
                 statement_tr.click()
                 sleep(self.CLICK_SLEEP)
+                self.wait(('loading' not in statement_tr.get_attribute('class')))
 
-            for tr in WebDriverWait(self.driver, self.CLICK_TIMEOUT).until(
-                    EC.presence_of_all_elements_located((By.CSS_SELECTOR,
-                      "table tbody tr.transaction-row.statement-"
-                          + statement_tr.get_attribute('id')))
-                    ):
+            for tr in self.locate_all(
+                (By.CSS_SELECTOR, "table tbody tr.transaction-row.statement-"
+                          + statement_tr.get_attribute('id'))):
 
                 logger.debug('found transaction row %s\n' % tr.text)
 

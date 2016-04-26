@@ -6,26 +6,22 @@ http://mijn.ing.nl
 
 Author: Alex Yushin <alexis@ww.net>
 
+TODO:
+
+    - actually select -370 days in the period of account movements
+
 """
 
 from wbc.plugins.base import Plugin
 from wbc.models import Account, Statement, Transaction, transactionType
 
-from datetime import datetime, date, timedelta
 import re
 
-from selenium.webdriver.support.ui import Select, WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import NoSuchElementException,TimeoutException,ElementNotVisibleException
-from datetime import date, datetime
-
-from selenium.webdriver.support.ui import Select
-from selenium.webdriver.common.keys import Keys
+from datetime import datetime
 
 from time import sleep
-
-from pprint import pformat
 
 import logging
 logger = logging.getLogger(__name__)
@@ -33,8 +29,8 @@ logger.setLevel(logging.DEBUG)
 
 
 class Plugin(Plugin):
-    CLICK_WAIT = 3
     CLICK_SLEEP = 1
+    DEFAULT_TIMEOUT = 3
     LOGIN_TIMEOUT = 15
     LOGIN_URL = 'https://klient1.rb.cz/ebts/version_02/eng/banka3.html'
 
@@ -50,32 +46,31 @@ class Plugin(Plugin):
         self.driver.switch_to.frame('Main')
 
         # Wait for the username and type it in...
-        elem_xpath = "//input[@name='a_username' and @type='text']"
-        WebDriverWait(self.driver, self.CLICK_WAIT).until(EC.visibility_of_element_located((By.XPATH, elem_xpath)))
-        elem = self.driver.find_element_by_xpath(elem_xpath)
-        elem.send_keys(username)
+        self.locate(
+            (By.XPATH, "//input[@name='a_username' and @type='text']")
+        ).send_keys(username)
 
         # Open the certification prompt box and accept it...
-        self.driver.find_element_by_name("b_authcode_Button").click()
-        WebDriverWait(self.driver, self.CLICK_WAIT).until(EC.alert_is_present())
+        self.locate((By.NAME, "b_authcode_Button")).click()
+        self.wait().until(EC.alert_is_present())
         self.driver.switch_to.alert.accept()
 
         # Get the auth code from the user and send it together with the 'pin'...
         auth_code = ''
         while not re.match('\d{11}', auth_code):
-            auth_code = self.user_input_method("Please enter the 11 digit auth code without dashes:\n")
+            auth_code = self.user_input("Please enter 11 digit auth code without dashes:\n")
 
-        elem = self.driver.find_element_by_name("a_userpassword")
-        elem.send_keys(auth_code)
-        elem = self.driver.find_element_by_name("Pin")
-        elem.send_keys(password)
+        self.locate((By.NAME, "a_userpassword")).send_keys(auth_code)
+        self.locate((By.NAME, "Pin")).send_keys(password)
 
         # Click OK to log in
-        self.driver.find_element_by_name("b_ok_Button").click()
+        self.locate((By.NAME, "b_ok_Button")).click()
 
         # Wait for the MainMenu to appear...
         self.driver.switch_to.default_content()
-        WebDriverWait(self.driver, self.LOGIN_TIMEOUT).until(EC.frame_to_be_available_and_switch_to_it('MainMenu'))
+        self.wait(wait = self.LOGIN_TIMEOUT).until(
+            EC.frame_to_be_available_and_switch_to_it('MainMenu'))
+
         self.logged_in = True
 
     def list_accounts(self):
@@ -105,19 +100,21 @@ class Plugin(Plugin):
         """
         self.driver.switch_to.default_content()
         self.driver.switch_to.frame('Choice')
-        for account_option in WebDriverWait(self.driver, self.CLICK_WAIT).until(
-            EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'select[name="a_account"] option'))):
-            if account_option.text.encode('utf-8') == account.name:
+
+        for account_option in self.locate_all(
+                (By.CSS_SELECTOR, 'select[name="a_account"] option')):
+            if account_option.text == account.name:
                 account_option.click()
-                sleep(1)
-                for currency_option in WebDriverWait(self.driver, self.CLICK_WAIT).until(
-                    EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'select[name="a_currency"] option'))):
-                    if currency_option.text.encode('utf-8') == account.currency:
+                sleep(self.CLICK_SLEEP)
+                for currency_option in self.locate_all(
+                        (By.CSS_SELECTOR, 'select[name="a_currency"] option')):
+                    if currency_option.text == account.currency:
                         currency_option.click()
-                        sleep(1)
+                        sleep(self.CLICK_SLEEP)
                         self.driver.switch_to.default_content()
                         return
-        raise ValueError('Not found account %s currency %s' % (account.name, account.currency))
+
+        raise ValueError('No account named %s in %s currency found' % (account.name, account.currency))
 
 
     def download_current(self, account):
@@ -128,11 +125,13 @@ class Plugin(Plugin):
         self.driver.switch_to.frame('MainMenu')
 
         # Select account history, account movements
-        account_history = self.driver.find_element_by_css_selector('table tbody tr#MainMenu1')
-        account_history.click()
-        account_movements = self.driver.find_element_by_css_selector('table tbody td table#SubMenu1 tbody tr td table tbody tr td')
-        assert "Account movements" in account_movements.text.encode('utf-8')
-        account_movements.click()
+        self.locate((By.CSS_SELECTOR, 'table tbody tr#MainMenu1')).click()
+
+        # XXX
+        self.locate((By.LINK_TEXT, 'Account movements')).click()
+        # element = self.locate((By.CSS_SELECTOR, 'table tbody td table#SubMenu1 tbody tr td table tbody tr td'))
+        # assert "Account movements" in element.text
+        # element.click()
 
         # Switch back to the default frame
         self.driver.switch_to.default_content()
@@ -142,14 +141,26 @@ class Plugin(Plugin):
 
         statement = Statement()
 
+        # Known transaction types...
+        transaction_types = {
+            'Card payment'              :   transactionType.PAYMENT,
+            'Enter transfer'            :   transactionType.XFER,
+            'Card issue fee'            :   transactionType.SRVCHG,
+            'Repeating transfer'        :   transactionType.REPEATPMT,
+            'Withdraw from ATM'         :   transactionType.ATM,
+            'Outgoing payment'          :   transactionType.XFER,
+            'Enter reverse transfer'    :   transactionType.DIRECTDEBIT,
+            'Cash deposit'              :   transactionType.CASH,
+            'Administration of current account' :   transactionType.SRVCHG
+        }
+
         # Scrape the account...
         while True:
-            for tr in WebDriverWait(self.driver, self.CLICK_WAIT).until(
-                EC.presence_of_all_elements_located((
-                        By.CSS_SELECTOR, 'form[name="ListRealTr"] table tbody tr td table tbody tr'))):
+            for tr in self.locate_all(
+                (By.CSS_SELECTOR, 'form[name="ListRealTr"] table tbody tr td table tbody tr')):
 
-                cols = tr.find_elements_by_css_selector('td font')
                 logger.debug('found statement line:\n%s' % tr.text)
+                cols = tr.find_elements_by_css_selector('td font')
 
                 # Skip the header...
                 if cols[0].text == u"NO.\nNUMBER":
@@ -159,37 +170,51 @@ class Plugin(Plugin):
                 if  u"TOTAL OF SELECTED CREDIT ITEMS" in cols[0].text:
                     return statement.finalize()
 
-                col = {'no': int(cols[0].text.encode('utf-8'))}
+                col = {'no': int(cols[0].text)}
 
-                (col['date'], col['time'], col_dummy) = cols[1].get_attribute('innerHTML').encode('utf-8').split('<br>')
+                (col['date'], col['time'], col_dummy) = cols[1].get_attribute('innerHTML').split('<br>')
                 (col['note'], col['account_name'], col['account_number']) = cols[2].get_attribute('innerHTML').split('<br>')
-                (col['date_deducted'], col['value'], col['type'], col['code']) = cols[3].get_attribute('innerHTML').encode('utf-8').split('<br>')
-                (col['variable_symbol'], col['constant_symbol'], col['specific_symbol'])= cols[4].get_attribute('innerHTML').replace('&nbsp;','').split('<br>')
+                (col['date_deducted'], col['value'], col['type'], col['code']) = cols[3].get_attribute('innerHTML').split('<br>')
+                (col['variable_symbol'], col['constant_symbol'], col['specific_symbol']) = cols[4].get_attribute('innerHTML').replace('&nbsp;','').split('<br>')
 
-                col['amount'] = cols[5].text.encode('utf-8').split('\n')[0].replace(' ','').replace(',','.')
-                col['fee']  = cols[6].text.encode('utf-8').replace(' ','').replace(',','.')
-                col['exchange'] = cols[7].text.encode('utf-8').replace(' ','').replace(',','.')
-                col['message'] = cols[8].text.encode('utf-8').replace(' ','').replace(',','.')
+                col['amount'] = cols[5].text.split('\n')[0].replace(' ','').replace(',','.')
+                col['fee']  = cols[6].text.replace(' ','').replace(',','.')
+                col['exchange'] = cols[7].text.replace(' ','').replace(',','.')
+                col['message'] = cols[8].text.replace(' ','').replace(',','.')
 
                 transaction = Transaction(
                     date = datetime.strptime(col['date'],'%d.%m.%Y').date(),
-                    name =  col['note'] or col['account_name'] or col['account_number'],
-                    memo =  col['note'] + '\n' + col['account_name'] + '\n' + col['account_number'] + '\n'  + col['type'] + '\n' + col['variable_symbol'] + '/' + col['constant_symbol'] + '/' + col['specific_symbol'],
+                    name =  col['account_name'] or col['account_number'] or col['note'],
+                    memo =  col['note'],
                     refnum =  col['code']
                 )
 
                 if account.last_download and transaction.date < account.last_download.date():
                     return statement.finalize()
 
-                # XXX Figure out the transaction type
+                # Construct a useful memo...
+                if col['account_name']:
+                    transaction.memo += ' /' + col['account_name']
+                if col['account_number']:
+                    transaction.memo += ' [' + col['account_number'] + ']'
+                if col['variable_symbol']:
+                    transaction.memo += ' VS:' + col['variable_symbol']
+                if col['constant_symbol']:
+                    transaction.memo += ' CS:' + col['constant_symbol']
+                if col['specific_symbol']:
+                    transaction.memo += ' SS:' + col['specific_symbol']
 
                 if col['amount']:
                     transaction.amount = float(col['amount'])
 
-                    if transaction.amount > 0:
-                        transaction.type = transactionType.CREDIT
-                    else:
-                        transaction.type = transactionType.DEBIT
+                    # Figure out the transaction type
+                    transaction.type = transaction_types.get(col['type'], None)
+                    if not transaction.type:
+                        if transaction.amount > 0:
+                            transaction.type = transactionType.CREDIT
+                        else:
+                            transaction.type = transactionType.DEBIT
+                            logger.notice('found unknown transaction type %s, using generic debit' % col['type'])
 
                     if col['fee']:
                         statement.transactions.append(Transaction(
@@ -230,7 +255,10 @@ class Plugin(Plugin):
                     else:
                         raise ValueError('No amount neither service charge')
 
+                    # Add the actual transaction type to the memo
+                    transaction.memo   += col['type']
+
                 statement.transactions.append(transaction)
 
-            self.driver.find_element_by_css_selector('a[href="javascript:top.Common.v_SubList.Next(1);"]').click()
+            self.locale((By.CSS_SELECTOR, 'a[href="javascript:top.Common.v_SubList.Next(1);"]')).click()
             sleep(self.CLICK_SLEEP)

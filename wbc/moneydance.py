@@ -131,5 +131,5 @@ def input_dialog(message):
 
 def download_all_transactions(connections, ra, moneydance, config = {}):
     for connection in connections:
-        connection.plugin.user_input_method = input_dialog
+        connection.plugin.user_input = input_dialog
         download_transactions(connection = connection, ra = ra, moneydance = moneydance)
