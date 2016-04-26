@@ -29,8 +29,8 @@ def download_transactions(connection, ra, moneydance):
     :return:    An array of statements with all the dow
     """
 
-    # XXX Should be a globally configured paramater
-    download_interval = timedelta(hours = 1)
+    # 0. Set user interface...
+    connection.plugin.user_input = input_dialog
 
     #
     # 1. Verify the configuration and find out the last_download date and time per account
@@ -55,13 +55,7 @@ def download_transactions(connection, ra, moneydance):
         if not account.last_download:
             account.last_download = datetime.utcfromtimestamp(MDAccountProxy(account.md_account).getOFXLastTxnUpdate()/1000)
 
-        logger.info('last download for this account was on %s' % account.last_download)
-
-        # Check if we should download this account again...
-        if download_interval:
-            if datetime.utcnow() - account.last_download < download_interval:
-                logger.info('too early to download %s - skipping' % account.name)
-                account.active = False
+        logger.info('last download for %s account was on %s' % (account.name, account.last_download))
 
     #
     # 2. Download the transactions with the plug-in
@@ -131,5 +125,4 @@ def input_dialog(message):
 
 def download_all_transactions(connections, ra, moneydance, config = {}):
     for connection in connections:
-        connection.plugin.user_input = input_dialog
         download_transactions(connection = connection, ra = ra, moneydance = moneydance)
