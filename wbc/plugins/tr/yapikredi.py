@@ -13,7 +13,8 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-from wbc import Connector
+from wbc.plugins.base import Plugin
+from wbc.models import Statement, Transaction, Balance, transactionType
 
 import re
 
@@ -24,42 +25,30 @@ from datetime import datetime
 
 from time import sleep
 
-class Plugin(Connector):
+class Plugin(Plugin):
     LOGIN_URL = 'https://internetsube.yapikredi.com.tr/ngi/index.do?lang=en'
-    CLICK_TIMEOUT = 3
-    LOGIN_TIMEOUT = 60
 
     def login(self, username, password):
         self.open_browser()
 
-        # self.driver.implicitly_wait(self.LOGIN_TIMEOUT)
-
         self.driver.get(self.LOGIN_URL)
-        assert u"Yapı Kredi" in self.driver.title
 
         # Wait for the username and type it in...
-        elem = self.driver.find_element_by_id('userCodeTCKN')
-        elem.send_keys(username)
+        self.locate((By.ID, 'userCodeTCKN')).send_keys(username)
+        self.locate((By.ID, 'password')).send_keys(password)
+        self.locate((By.ID, 'btnSubmit')).click()
 
-        elem = self.driver.find_element_by_id('password')
-        elem.send_keys(password)
-
-        self.driver.find_element_by_id('btnSubmit').click()
 
         # Get the auth code from the user and send it together with the 'pin'...
-        # auth_code = raw_input("Please enter the auth code:\n")
-        # elem = self.driver.find_element_by_id('otpPassword')
-        # elem.send_keys(auth_code)
-        # self.driver.find_element_by_id('btnSubmit').click()
+        auth_code = ''
+        while not re.match('\d{5}', auth_code):
+            auth_code = self.user_input("Please enter the 5 digit OTP:\n")
 
+        self.locate((By.ID, 'otpPassword')).send_keys(auth_code)
+        self.locate((By.ID, 'btnSubmit')).click()
 
-        # Wait until the home page loads...
-        WebDriverWait(self.driver, self.LOGIN_TIMEOUT).\
-            until(EC.presence_of_element_located((By.LINK_TEXT,"MY ACCOUNTS")))
-
-    def wait_and_click(self, link_text):
-        WebDriverWait(self.driver, self.CLICK_TIMEOUT).\
-        until(EC.presence_of_element_located((By.LINK_TEXT,link_text))).click()
+        self.locate((By.LINK_TEXT,"MY ACCOUNTS"), wait = self.LOGIN_TIMEOUT)
+        self.logged_in = True
 
     #
     #
@@ -90,33 +79,33 @@ class Plugin(Connector):
     #
     #     return accounts
 
-    def scrape_current(self, account, datefrom, currency=None):
-        logger.debug('Navigating to the account movements..')
+    def download_current(self, account):
+        self.locate((By.LINK_TEXT, "MY ACCOUNTS")).click()
+        self.locate((By.LINK_TEXT, "My Current Accounts")).click()
+        sleep(self.CLICK_SLEEP)
 
-        assert datefrom
-
-        # self.driver.implicitly_wait(self.CLICK_TIMEOUT)
-        self.wait_and_click("MY ACCOUNTS")
-        self.wait_and_click("My Current Accounts")
-        sleep(1)
-
-        self.driver.find_element_by_xpath(
+        self.locate((By.XPATH,
             "//div[@class='table-wrapper']/table/tbody/tr/td/div[@class='module-account']"
-            + "/h1[@title='" + account + "']/../../..").click()
+            + "/h1[@title='" + account.name + "']/../../..")
+        ).click()
 
-        self.wait_and_click('Account Movements')
-        self.wait_and_click('Detailed Search')
+        self.locate((By.LINK_TEXT, 'Account Movements')).click()
+        self.locate((By.LINK_TEXT, 'Detailed Search')).click()
 
-        startDate = self.driver.find_element_by_id('startDate')
+        startDate = self.locate((By.ID, 'startDate'))
         startDate.clear()
-        startDate.send_keys(datefrom.strftime("%d/%m/%Y"))
+        startDate.send_keys(account.last_download.strftime("%d/%m/%Y"))
+
+        # This is necessary to trigger an update of the javascript selector...
         self.driver.find_element_by_id('startDateFC').\
             find_element_by_css_selector('img.ui-datepicker-trigger').click()
         self.driver.find_element_by_id('btnList').click()
-        sleep(2)
+        sleep(self.CLICK_SLEEP)
 
-        transactions = []
+        statement = Statement(account = account)
+
         # # Plan A
+
         # for tr in self.driver.find_elements_by_css_selector('div.table-wrapper table tbody tr'):
         #     # Get the row of td elements...
         #     td = tr.find_elements_by_tag_name('td')
@@ -130,7 +119,8 @@ class Plugin(Connector):
 
         # Plan B
         while True:
-            getMoreRow = self.driver.find_elements_by_css_selector('div.table-wrapper table tbody tr td.getMore_row')
+            getMoreRow = self.driver.find_elements_by_css_selector(
+                'div.table-wrapper table tbody tr td.getMore_row')
             if getMoreRow and getMoreRow[0].is_displayed():
                 element_id = getMoreRow[0].find_element_by_xpath('..').id
                 getMoreRow[0].click()
@@ -143,7 +133,7 @@ class Plugin(Connector):
         # The amount regular expression...
         amount_p = re.compile('([-+,.\d]+)\s(\w{2,3})')
 
-        for tr in self.driver.find_elements_by_css_selector('div.table-wrapper table tbody tr'):
+        for tr in self.locate_all((By.CSS_SELECTOR, 'div.table-wrapper table tbody tr')):
             td = tr.find_elements_by_tag_name('td')
 
             #if 'getMore_row' in td[0].get_attribute('class'):
@@ -151,20 +141,20 @@ class Plugin(Connector):
 
             logger.debug('# %s' % tr.text)
 
-            line = {
-                'date': datetime.strptime(td[1].text.encode('utf-8'), '%d/%m/%Y'),
-                'name': td[4].text,
-                'memo': td[4].text,
-                'amount': float(amount_p.match(td[5].text.encode('utf-8')).group(1).replace('.','').replace(',','.')),
-            }
-            if(line['amount'] > 0):
-                line['type'] = 'CREDIT'
+            transaction = Transaction(
+                date    = datetime.strptime(td[1].text.encode('utf-8'), '%d/%m/%Y'),
+                name    = td[4].text,
+                memo    = td[4].text,
+                amount  = float(amount_p.match(td[5].text).group(1).replace('.','').replace(',','.'))
+            )
+
+            if(transaction.amount > 0):
+                transaction.type = transactionType.CREDIT
             else:
-                line['type'] = 'DEBIT'
+                transaction.type = transactionType.DEBIT
 
-            transactions.append(line)
-
-        return transactions
+            statement.transactions.append(transaction)
+        return statement.finalize()
 
     def logout(self):
         pass
