@@ -117,24 +117,42 @@ class Plugin(Plugin):
         self.driver.switch_to.frame('Main')
 
         # XXX We should make sure we select -370 transaction in the filter
+        self.locate((By.XPATH, "//select[@name='CBRealTrFilters']/option[contains(.,'last 370 days')]")).click()
+        sleep(self.CLICK_SLEEP)
+        # self.locate((By.CSS_SELECTOR, 'a[href="javascript:top.Program.ShowRealTrFilter();"]')).click()
+        # sleep(self.CLICK_SLEEP)
+        # elem = self.locate((By.CSS_SELECTOR, 'input[name="a_Name"]'))
+        # elem.clear()
+        # elem.send_keys("last 370 days")
+        # elem = self.locate((By.CSS_SELECTOR, 'input[name="a_ValidFrom"]'))
+        # elem.clear()
+        # elem.send_keys('-370')
+        # # Here we should clear all other fields too
+        # self.locate((By.CSS_SELECTOR, 'a[href="javascript:top.Program.ShowRealTransactions();"]')).click()
+        # sleep(self.CLICK_SLEEP)
+
+
         statement = Statement(account = account)
 
         # Known transaction types...
         transaction_types = {
-            'Card payment'              :   transactionType.PAYMENT,
+            'Card payment'              :   transactionType.POS,
             'Enter transfer'            :   transactionType.XFER,
             'Card issue fee'            :   transactionType.FEE,
             'Repeating transfer'        :   transactionType.REPEATPMT,
             'Withdraw from ATM'         :   transactionType.ATM,
-            'Outgoing payment'          :   transactionType.XFER,
+            'Outgoing payment'          :   transactionType.PAYMENT,
             'Enter reverse transfer'    :   transactionType.DIRECTDEBIT,
             'Cash deposit'              :   transactionType.DEP,
             'Administration of current account' :   transactionType.SRVCHG,
             'Withholding tax on interest'   : transactionType.OTHER,
             'Cash withdrawal'           : transactionType.CASH,
-            'Currency conversion'       : transactionType.SRVCHG,
+            'Currency conversion'       : transactionType.XFER,
             'ATM withdrawal while abroad': transactionType.ATM,
-            'Outgoing SEPA payment':    transactionType.PAYMENT
+            'Outgoing SEPA payment':    transactionType.PAYMENT,
+            'Credit interest'           : transactionType.INT,
+            'Transfer'                  : transactionType.XFER,
+            'Incoming SEPA payment'     : transactionType.PAYMENT
         }
 
         # Scrape the account...
@@ -155,8 +173,8 @@ class Plugin(Plugin):
 
                 col = {'no': int(cols[0].text)}
 
-                (col['date'], col['time'], col_dummy) = cols[1].get_attribute('innerHTML').split('<br>')
-                (col['note'], col['account_name'], col['account_number']) = cols[2].get_attribute('innerHTML').split('<br>')
+                (col['date'], col['time'], col_dummy) = cols[1].text.split("\n")
+                (col['note'], col['account_name'], col['account_number']) = cols[2].get_attribute('innerHTML').replace('&nbsp;','').split('<br>')
                 (col['date_deducted'], col['value'], col['type'], col['code']) = cols[3].get_attribute('innerHTML').split('<br>')
                 (col['variable_symbol'], col['constant_symbol'], col['specific_symbol']) = cols[4].get_attribute('innerHTML').replace('&nbsp;','').split('<br>')
 
@@ -167,19 +185,29 @@ class Plugin(Plugin):
 
                 transaction = Transaction(
                     date = datetime.strptime(col['date'],'%d.%m.%Y').date(),
-                    name =  col['account_name'] or col['account_number'] or col['note'],
-                    memo =  col['note'],
+                    memo = col['note'],
                     refnum =  col['code']
                 )
 
                 if account.last_download and transaction.date < account.last_download.date():
                     return statement.finalize()
 
-                # Construct a useful memo...
-                if col['account_name']:
-                    transaction.memo += ' /' + col['account_name']
-                if col['account_number']:
-                    transaction.memo += ' [' + col['account_number'] + ']'
+                # Figure out the transaction type
+                transaction.type = transaction_types.get(col['type'], None)
+
+                if transaction.type == transactionType.POS:
+                    transaction.name = col['note']
+                    transaction.memo = (col['account_name'] + col['account_number']).strip()
+                else:
+                    transaction.name =  col['account_name'] or col['account_number'] or col['note']
+
+                    # Construct a useful memo...
+                    transaction.memo = col['note']
+                    if col['account_name']:
+                        transaction.memo += '/ ' + col['account_name']
+                    if col['account_number']:
+                        transaction.memo += ' [' + col['account_number'] + ']'
+
                 if col['variable_symbol']:
                     transaction.memo += ' VS:' + col['variable_symbol']
                 if col['constant_symbol']:
@@ -187,17 +215,10 @@ class Plugin(Plugin):
                 if col['specific_symbol']:
                     transaction.memo += ' SS:' + col['specific_symbol']
 
+
+                # Find out the correct amount and transaction type...
                 if col['amount']:
                     transaction.amount = float(col['amount'])
-
-                    # Figure out the transaction type
-                    transaction.type = transaction_types.get(col['type'], None)
-                    if not transaction.type:
-                        if transaction.amount > 0:
-                            transaction.type = transactionType.CREDIT
-                        else:
-                            transaction.type = transactionType.DEBIT
-                            logger.warning('found unknown transaction type %s, using generic debit' % col['type'])
 
                     if col['fee']:
                         statement.transactions.append(Transaction(
@@ -239,7 +260,15 @@ class Plugin(Plugin):
                         raise ValueError('No amount neither service charge')
 
                     # Add the actual transaction type to the memo
-                    transaction.memo   += col['type']
+                    transaction.memo   = (transaction.memo + ' ' + col['type']).strip()
+
+                if not transaction.type:
+                    if transaction.amount > 0:
+                        transaction.type = transactionType.CREDIT
+                        logger.warning('found unknown transaction type %s, using generic credit' % col['type'])
+                    else:
+                        transaction.type = transactionType.DEBIT
+                        logger.warning('found unknown transaction type %s, using generic debit' % col['type'])
 
                 statement.transactions.append(transaction)
 
