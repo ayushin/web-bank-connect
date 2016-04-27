@@ -7,29 +7,20 @@ Author: Alex Yushin <alexis@ww.net>
 
 """
 
-from pprint import pformat
-from time import sleep
-import re
-
 import logging
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-from wbc.wbc import Connector
+from wbc import Connector
 
-from datetime import datetime, date, timedelta
 import re
 
-from selenium.webdriver.support.ui import Select, WebDriverWait
+from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import NoSuchElementException,TimeoutException,ElementNotVisibleException
-from datetime import date, datetime
-
-from selenium.webdriver.support.ui import Select
-from selenium.webdriver.common.keys import Keys
+from datetime import datetime
 
 from time import sleep
 
