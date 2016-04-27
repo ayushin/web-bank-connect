@@ -43,6 +43,6 @@ elif args.command == 'download':
     for statement in statements:
         print statement.account
         for transaction in statement.transactions:
-            print transaction
+            print transaction.encode('utf-8')
 elif args.command == 'list':
     pass

@@ -14,7 +14,7 @@ logger.setLevel(logging.DEBUG)
 
 
 from wbc.plugins.base import Plugin
-from wbc.models import Statement, Transaction, Balance, transactionType
+from wbc.models import Statement, Transaction, Balance, transactionType, NEVER
 
 import re
 
@@ -83,12 +83,18 @@ class Plugin(Plugin):
     #     return accounts
 
     def download_current(self, account):
+
+        if not account.last_download:
+            account.last_download = NEVER
+
         self.locate((By.LINK_TEXT, "MY ACCOUNTS")).click()
+        sleep(self.CLICK_SLEEP)
         self.locate((By.LINK_TEXT, "My Current Accounts")).click()
         sleep(self.CLICK_SLEEP)
+        sleep(2)
 
         self.locate((By.XPATH,
-            "//div[@class='table-wrapper']/table/tbody/tr/td/div[@class='module-account']"
+            "//div[@class='module-account']"
             + "/h1[@title='" + account.name + "']/../../..")
         ).click()
 
