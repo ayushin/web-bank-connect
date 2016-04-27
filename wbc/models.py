@@ -67,10 +67,7 @@ class Connection(object):
     plugins methods.
 
     """
-    active = True
-    accounts = []
-
-    def __init__(self, plugin, name, username, password, accounts = None, **kwargs):
+    def __init__(self, plugin, name, username, password, accounts = [], active = True, **kwargs):
         """
         Creates a connection object and loads the specified plugin.
 
@@ -93,6 +90,7 @@ class Connection(object):
                         after it is loaded
 
         """
+        self.active = active
         self.plugin = load_plugin(plugin)
         self.name = name
         self.username = username
@@ -123,16 +121,22 @@ class Connection(object):
         assert accounts
 
         for account in accounts:
-            if account.active:
-                # login() handles multiple calls without re-logging in...
-                self.login()
-                statement = getattr(self.plugin, 'download_' + account.type)(account)
-                if statement:
-                    statement.account = account
-                    statements.append(statement)
+            # Active account?
+            if not account.active:
+                continue
+            # Download interval is set and is it time?
+            if account.download_interval:
+                if datetime.utcnow() - account.last_download < account.download_interval:
+                    logger.info('too early to download %s - skipping' % account.name)
+                    continue
+
+            # login() handles multiple calls without re-logging in...
+            self.login()
+            statement = getattr(self.plugin, 'download_' + account.type)(account)
+            if statement:
+                statements.append(statement)
 
         # self.logout()
-
         return statements
 
     def logout(self):
@@ -173,11 +177,11 @@ class Connection(object):
         return conf_str
 
 class Account(object):
-    last_download = None
-    active = True
-    currency = None
-
-    def __init__(self, name, type, currency = None, **kwargs):
+    def __init__(self, name, type, currency = None, active = True,
+                 download_interval = None, last_download = None, **kwargs):
+        self.last_download = last_download
+        self.download_interval = download_interval
+        self.active = active
         self.name = name
         self.type = type
         self.currency = currency
@@ -199,10 +203,12 @@ class Account(object):
         return "Account %s; type=%s; currency=%s" % (self.name, self.type, self.currency)
 
 class Statement(object):
-    transactions = []
 
-    opening_balance = None
-    closing_balance = None
+    def __init__(self, account):
+        self.opening_balance = None
+        self.closing_balance = None
+        self.transactions = []
+        self.account = account
 
     def finalize(self):
         self.generate_fitids()
@@ -265,25 +271,19 @@ class transactionType:
     OTHER       = 'other'       # Other
 
 class Transaction(object):
-    # Provide reasonable defaults
-    reservation = False
-    refnum = None
-    fitid = None
-
-    # @property
-    # def datePosted(self, datePosted):
-    #     datePosted
-
-    def __init__(self, date, **kwargs):
+    def __init__(self, date, reservation = False, refnum = None, fitid = None, **kwargs):
+        self.reservation = reservation
+        self.refnum = refnum
+        self.fitid = fitid
         self.date = date
-
         # Pass the optional attributes
         for kw in kwargs.keys():
             self.__setattr__(kw, kwargs[kw])
 
 
     def __str__(self):
-        return "%s:%s:%s:%s:%s:%s (%s)" % (self.date, self.name, self.memo, self.type, self.amount, self.refnum, self.fitid)
+        return "Transaction(date = %s, amount = %s, type = %s, name = %s, memo = %s, refnum = %s, fitid = %s" % (
+            self.date, self.amount, self.type, self.name, self.memo,  self.refnum, self.fitid)
 
     def __ofx__(self):
         pass
