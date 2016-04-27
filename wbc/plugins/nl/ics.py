@@ -8,7 +8,7 @@ Author: Alex Yushin <alexis@ww.net>
 
 import logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 
 from datetime import date, datetime, timedelta
@@ -46,7 +46,7 @@ class Plugin(Plugin):
 
         LOOKUP_MONTH = (None, 'jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec')
 
-        statement = Statement()
+        statement = Statement(account = account)
 
         # Download credit card statement
         logger.debug("Navigating to the credit card %s..." % self.CREDITCARD_URL)
