@@ -21,12 +21,15 @@ import re
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
+from selenium.common.exceptions import NoSuchElementException, StaleElementReferenceException,TimeoutException
+
 from datetime import datetime
 
 from time import sleep
 
 class Plugin(Plugin):
     LOGIN_URL = 'https://internetsube.yapikredi.com.tr/ngi/index.do?lang=en'
+    DEFAULT_TIMEOUT = 15
 
     def login(self, username, password):
         self.open_browser()
@@ -104,56 +107,54 @@ class Plugin(Plugin):
 
         statement = Statement(account = account)
 
-        # # Plan A
-
-        # for tr in self.driver.find_elements_by_css_selector('div.table-wrapper table tbody tr'):
-        #     # Get the row of td elements...
-        #     td = tr.find_elements_by_tag_name('td')
-        #
-        #     # If we reached the last line.. Get more
-        #     if 'getMore_row' in td[0].get_attribute('class') and td[0].is_displayed():
-        #         td[0].find_element_by_id('btnGetMore').click()
-        #         continue
-        #
-        #     logger.debug('transaction: %s' % tr.text)
-
-        # Plan B
-        while True:
-            getMoreRow = self.driver.find_elements_by_css_selector(
-                'div.table-wrapper table tbody tr td.getMore_row')
-            if getMoreRow and getMoreRow[0].is_displayed():
-                element_id = getMoreRow[0].find_element_by_xpath('..').id
-                getMoreRow[0].click()
-                while self.driver.find_elements_by_id(element_id):
-                    sleep(1)
-                sleep(5) # Should check Please wait longer mesage.
-            else:
-                break
-
         # The amount regular expression...
         amount_p = re.compile('([-+,.\d]+)\s(\w{2,3})')
 
-        for tr in self.locate_all((By.CSS_SELECTOR, 'div.table-wrapper table tbody tr')):
+        # Plan A
+        tr = self.locate((By.CSS_SELECTOR, 'div.table-wrapper table tbody tr'))
+        prev_tr = None
+
+        while True:
             td = tr.find_elements_by_tag_name('td')
+            # Empty list?
+            if 'dataTables_empty' in td[0].get_attribute('class'):
+                break
 
-            #if 'getMore_row' in td[0].get_attribute('class'):
-            #    continue
-
-            logger.debug('# %s' % tr.text)
-
-            transaction = Transaction(
-                date    = datetime.strptime(td[1].text.encode('utf-8'), '%d/%m/%Y'),
-                name    = td[4].text,
-                memo    = td[4].text,
-                amount  = float(amount_p.match(td[5].text).group(1).replace('.','').replace(',','.'))
-            )
-
-            if(transaction.amount > 0):
-                transaction.type = transactionType.CREDIT
+            # More rows?
+            if 'getMore_row' in td[0].get_attribute('class') and td[0].is_displayed():
+                tr.find_element_by_id('btnGetMore').click()
+                try:
+                    timeout = self.DEFAULT_TIMEOUT
+                    while tr.is_displayed():
+                        sleep(1)
+                        timeout -= 1
+                        if timeout < 0:
+                            raise TimeoutException
+                except StaleElementReferenceException:
+                    pass
             else:
-                transaction.type = transactionType.DEBIT
+                transaction = Transaction(
+                    date    = datetime.strptime(td[1].text.encode('utf-8'), '%d/%m/%Y'),
+                    name    = td[4].text,
+                    memo    = td[4].text,
+                    amount  = float(amount_p.match(td[5].text).group(1).replace('.','').replace(',','.'))
+                )
 
-            statement.transactions.append(transaction)
+                if(transaction.amount > 0):
+                    transaction.type = transactionType.CREDIT
+                else:
+                    transaction.type = transactionType.DEBIT
+
+                statement.transactions.append(transaction)
+
+                # Save this tr as prev_tr...
+                prev_tr = tr
+
+            try:
+                tr = prev_tr.find_element_by_xpath('following-sibling::tr')
+            except NoSuchElementException:
+                break
+
         return statement.finalize()
 
     def logout(self):
