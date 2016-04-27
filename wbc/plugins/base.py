@@ -26,13 +26,16 @@ def load_plugin(plugin_name):
 
 # Definition of web bank connector
 class Plugin(object):
-    logged_in = False
     user_input = raw_input
+    logged_in  = False
 
     # Some reasonable defaults
     DEFAULT_TIMEOUT = 5
     CLICK_SLEEP = 1
     LOGIN_TIMEOUT = 45
+
+    def __init__(self):
+        logged_in = False
 
     # Plugin interface methods
     def open_browser(self):
