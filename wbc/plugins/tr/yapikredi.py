@@ -12,16 +12,15 @@ import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-
 from wbc.plugins.base import Plugin
-from wbc.models import Statement, Transaction, Balance, transactionType, NEVER
+from wbc.models import Statement, Transaction, Account, Balance, transactionType, NEVER
+from selenium.common.exceptions import NoSuchElementException
 
 import re
 
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import NoSuchElementException, StaleElementReferenceException,TimeoutException
 
 from datetime import datetime
 
@@ -30,6 +29,7 @@ from time import sleep
 class Plugin(Plugin):
     LOGIN_URL = 'https://internetsube.yapikredi.com.tr/ngi/index.do?lang=en'
     DEFAULT_TIMEOUT = 15
+    CLICK_LONG_SLEEP = 3
 
     def login(self, username, password):
         self.open_browser()
@@ -53,45 +53,45 @@ class Plugin(Plugin):
         self.locate((By.LINK_TEXT,"MY ACCOUNTS"), wait = self.LOGIN_TIMEOUT)
         self.logged_in = True
 
-    #
+    def navigate_current_accounts(self):
+        logger.debug('Navigating to accounts list..')
+        self.locate((By.LINK_TEXT, "MY ACCOUNTS")).click()
+        sleep(self.CLICK_SLEEP)
+        self.locate((By.LINK_TEXT, "My Current Accounts")).click()
+        sleep(self.CLICK_LONG_SLEEP)
+
     #
     # List the accounts online
     #
-    #
-    # def list_accounts(self):
-    #     accounts = []
-    #
-    #     logger.debug('Navigating to accounts list..')
-    #     self.driver.find_element_by_link_text("MY ACCOUNTS").click()
-    #     self.wait_and_find_link_text("My Current Accounts").click()
-    #
-    #     accounts_table = self.driver.find_element_by_xpath("//table[@class='dataTable']")
-    #
-    #     for account_tr in accounts_table.find_elements_by_xpath('tbody/tr'):
-    #         (td_check, td_name, td_balance, td_limit, td_avail) = account_tr.find_elements_by_xpath('td')
-    #         account_div = td_name.find_element_by_class_name('module-account')
-    #         account = {
-    #             'type'          :   'current',
-    #             'name'          :   account_div.find_element_by_tag_name('h1').text.encode('utf-8'),
-    #             # 'balance'       :   {
-    #             #     'amount'    :   float(account_data[2].text.encode('utf-8').replace('.', '').replace(',','.').replace('€ ','')),
-    #             #     'date'      :   datetime.utcnow().date()
-    #             #}
-    #         }
-    #         accounts.append(account)
-    #
-    #     return accounts
+    def list_accounts(self):
+        accounts = []
+
+        self.navigate_current_accounts()
+
+        accounts_table = self.locate_all((By.XPATH, "//table[@class='dataTable']"))
+
+        for tr in accounts_table.find_elements_by_css_selector('tbody tr'):
+            (td_check, td_name, td_balance, td_limit, td_avail) = tr.find_elements_by_tag_name('td')
+            account_div = td_name.find_element_by_class_name('module-account')
+            account = Account(
+                type        =   'current',
+                name        =   account_div.find_element_by_tag_name('h1').text,
+                currency    =   '???'
+            )
+            account.closing_balance = Balance(
+                amount      = float(account_data[2].text.encode('utf-8').replace('.', '').replace(',','.').replace('€ ','')),
+                date        = datetime.utcnow().date()
+            )
+            accounts.append(account)
+
+        return accounts
 
     def download_current(self, account):
 
         if not account.last_download:
             account.last_download = NEVER
 
-        self.locate((By.LINK_TEXT, "MY ACCOUNTS")).click()
-        sleep(self.CLICK_SLEEP)
-        self.locate((By.LINK_TEXT, "My Current Accounts")).click()
-        sleep(self.CLICK_SLEEP)
-        sleep(2)
+        self.navigate_current_accounts()
 
         self.locate((By.XPATH,
             "//div[@class='module-account']"
@@ -127,17 +127,13 @@ class Plugin(Plugin):
                 break
 
             # More rows?
-            if 'getMore_row' in td[0].get_attribute('class') and td[0].is_displayed():
-                tr.find_element_by_id('btnGetMore').click()
-                try:
-                    timeout = self.DEFAULT_TIMEOUT
-                    while tr.is_displayed():
-                        sleep(1)
-                        timeout -= 1
-                        if timeout < 0:
-                            raise TimeoutException
-                except StaleElementReferenceException:
-                    pass
+            if 'getMore_row' in td[0].get_attribute('class'):
+                if td[0].is_displayed():
+                    tr.find_element_by_id('btnGetMore').click()
+                    self.wait().until_not(self.element_is_displayed(tr))
+                else:
+                    # No more rows?
+                    break
             else:
                 transaction = Transaction(
                     date    = datetime.strptime(td[1].text.encode('utf-8'), '%d/%m/%Y'),
@@ -155,10 +151,10 @@ class Plugin(Plugin):
 
                 # Save this tr as prev_tr...
                 prev_tr = tr
-
             try:
                 tr = prev_tr.find_element_by_xpath('following-sibling::tr')
             except NoSuchElementException:
+                # No more rows...
                 break
 
         return statement.finalize()

@@ -8,7 +8,7 @@ Author: Alex Yushin <alexis@ww.net>
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-
+from selenium.common.exceptions import StaleElementReferenceException
 
 # Configuration defaults
 PLUGIN_PREFIX = ".".join(__name__.split(".")[:-1])
@@ -82,3 +82,12 @@ class Plugin(object):
         return self.wait(wait = wait).until(
             EC.presence_of_all_elements_located(locator)
         )
+
+    def element_is_displayed(self, element):
+        try:
+            if element.is_displayed():
+                return True
+            else:
+                return False
+        except StaleElementReferenceException:
+            return False
