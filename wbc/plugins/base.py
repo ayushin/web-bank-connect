@@ -7,8 +7,11 @@ Author: Alex Yushin <alexis@ww.net>
 
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.common.by import By
+
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import StaleElementReferenceException
+from selenium.common.exceptions import StaleElementReferenceException, TimeoutException
+from time import sleep
 
 # Configuration defaults
 PLUGIN_PREFIX = ".".join(__name__.split(".")[:-1])
@@ -82,6 +85,17 @@ class Plugin(object):
         return self.wait(wait = wait).until(
             EC.presence_of_all_elements_located(locator)
         )
+
+    def locate_all_inner(self, element, locator, wait = DEFAULT_TIMEOUT):
+        timeout = wait
+        while timeout > 0:
+            result = element.find_elements(list(locator)[0],
+                                           list(locator)[1])
+            if result:
+                return result
+            sleep(0.5)
+        raise TimeoutException
+
 
     def element_is_displayed(self, element):
         try:
