@@ -15,16 +15,19 @@ import logging
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import NoSuchElementException,TimeoutException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
+
+from time import sleep
 
 from wbc.plugins.base import Plugin
+from wbc.models import Statement, Transaction, Account, Balance, transactionType
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 class Plugin(Plugin):
     LOGIN_URL = 'https://mijn.ing.nl/internetbankieren/SesamLoginServlet'
-    CURRENT_URL = 'https://bankieren.mijn.ing.nl/particulier/betalen/index'
+    ACCOUNTS_URL = 'https://bankieren.mijn.ing.nl/particulier/betalen/index'
     CREDITCARD_URL = 'https://bankieren.mijn.ing.nl/particulier/creditcard/saldo-overzicht/index'
 
     #
@@ -33,18 +36,20 @@ class Plugin(Plugin):
     #
     #
     def login(self, username, password):
-        logger.info('Logging in...')
-
         self.open_browser()
-        logger.debug('Navigating to %s...' % self.login_url)
-        self.driver.get(self.login_url)
+        logger.debug('Navigating to %s...' % self.LOGIN_URL)
+
+        self.driver.get(self.LOGIN_URL)
         assert "ING" in self.driver.title
 
         self.locate((By.XPATH, '//label[text()="Gebruikersnaam"]')).send_keys(username)
         self.locate((By.XPATH, '//label[text()="Wachtwoord"]')).send_keys(password)
         self.locate((By.CSS_SELECTOR, '.submit')).click()
 
-        assert "Mijn ING Overzicht - Mijn ING" in self.driver.title
+        self.locate((By.XPATH,
+            "//body/div/div/h1[contains(.,'Mijn ING Overzicht')]"),
+            wait = self.LOGIN_TIMEOUT)
+
         self.logged_in = 1
 
     #
@@ -55,178 +60,193 @@ class Plugin(Plugin):
     #   At this point multiple credit cards are not supported
     #
     #
-    def scrape_ccard(self, account, datefrom, currency=None):
-        # Download credit card statement
-        logger.debug('Navigating to %s...', self.creditcard_url)
-        self.driver.get(self.creditcard_url)
+    def download_ccard(self, account):
+        assert account.type == 'ccard'
 
-        transactions = []
+        # Download credit card statement
+        logger.debug('Navigating to %s...', self.CREDITCARD_URL)
+        self.driver.get(self.CREDITCARD_URL)
+
+        statement = Statement(account = account)
 
         # We keep on clicking on "previous period" until we reach the datefrom or the very first statement available
         while True:
             # get all the lines of the current period
-            for tr in self.driver.find_elements_by_xpath("//div[@id='statementDetailTable']/div/div[@class='riaf-datatable-canvas']/table/tbody/tr[@class='riaf-datatable-contents ']"):
+            for tr in self.locate_all((By.XPATH,
+                "//div[@id='statementDetailTable']/div/div[@class='riaf-datatable-canvas']"
+                   + "/table/tbody/tr[contains(@class, 'riaf-datatable-contents')]")):
+
                 logger.debug('transaction:\n%s' % tr.text)
-                # Date of this transaction
-                line= {
-                    'date' : datetime.strptime(tr.find_element_by_class_name("riaf-datatable-column-date").text,'%d-%m-%Y').date(),
-                    'amount' : float(tr.find_element_by_class_name("riaf-datatable-column-amount").text.replace('.','').replace(',','.'))}
+
+                date_td = tr.find_element_by_css_selector("td.riaf-datatable-column-date")
+
+                # Skip empty lines...
+                if not date_td.text:
+                    continue
+
+                transaction = Transaction(
+                    date    = datetime.strptime(date_td.text,'%d-%m-%Y').date(),
+                    amount  = float(tr.find_element_by_css_selector(
+                        "td.riaf-datatable-column-amount").text.replace('.','').replace(',','.'))
+                )
 
                 # Should we continue ?
-                if datefrom and line['date'] < datefrom:
-                    return transactions
+                if account.last_download and transaction.date < account.last_download.date():
+                    return statement.finalize()
 
                 # Is this a reservation?
-                if tr.find_element_by_class_name("riaf-datatable-column-first").text == '*':
-                    line['reservation'] = True
+                if tr.find_element_by_css_selector("td.riaf-datatable-column-first").text == '*':
+                    transaction.reservation = True
 
-
-                # Initialize amount and transaction type
-                if tr.find_element_by_class_name("riaf-datatable-column-last").find_element_by_xpath('span').get_attribute("class") == 'riaf-datatable-icon-crdb-db' :
-                    line['type'] = 'DEBIT'
-                    line['amount'] = -line['amount']
-                elif tr.find_element_by_class_name("riaf-datatable-column-last").find_element_by_xpath('span').get_attribute("class") == 'riaf-datatable-icon-crdb-cr' :
-                    line['type'] = 'CREDIT'
+                # Set up the sign of the amount and the transaction type
+                sign_class = tr.find_element_by_css_selector("td.riaf-datatable-column-last")\
+                    .find_element_by_tag_name('span').get_attribute("class")
+                if sign_class == 'riaf-datatable-icon-crdb-db':
+                    transaction.type = transactionType.DEBIT
+                    transaction.amount = -transaction.amount
+                elif sign_class == 'riaf-datatable-icon-crdb-cr':
+                    transaction.type = transactionType.CREDIT
                 else:
                     raise ValueError('No sign for transaction')
 
-                line['name'] = tr.find_elements_by_class_name("riaf-datatable-column-text")[0].text.encode('utf-8')
+                td_text = tr.find_elements_by_css_selector("td.riaf-datatable-column-text")
+                card_number = td_text[1].text
+                transaction.name = td_text[0].text
 
                 # Get the memo...
                 tr.click()
                 tr_details = tr.find_element_by_xpath("following-sibling::tr[@class='riaf-datatable-details-open']")
-                logger.debug('details row:\n %s' % tr_details.text)
+                # logger.debug('details row:\n %s' % tr_details.text)
 
                 # XXX We could consider beautifying below...
-                line['memo'] = tr_details.find_elements_by_class_name("riaf-datatable-details-contents")[0].text.encode('utf-8')
+                transaction.memo  = tr_details.find_element_by_css_selector("td.riaf-datatable-details-contents").text
 
-                transactions.append(line)
+                statement.transactions.append(transaction)
 
             # Download previous credit card statement
             try:
                 self.driver.find_element_by_id('previousPeriod').click()
             except NoSuchElementException:
                 # Reached the very first period...
-                return transactions
+                return statement.finalize()
+
 
     #
     #
-    #
-    # Scraping current account
-    #
+    # Download current account
     #
     #
     #
-
-    # At first we expand the account up to the datefrom
-    def expand_account(self, account, datefrom):
-        # Navigate to the payment index page...
-        self.driver.get(self.accounts_url)
+    def download_current(self, account):
+        # Navigate to the curent accounts
+        self.driver.get(self.ACCOUNTS_URL)
+        sleep(self.CLICK_SLEEP)
 
         # Navigate to the account... Click
-        self.driver.find_element_by_xpath("//div[@id='accounts']/div/div/ol/li/a/div[contains(text(), '" + account +"')]").click()
+        self.locate((By.XPATH, "//div[@id='accounts']/div/div/ol/li/a/div[contains(text(), '"
+                     + account.name + "')]")).click()
+        sleep(self.CLICK_SLEEP)
 
         # Wait until the new account started to load...
-        try:
-            WebDriverWait(self.driver, 3).until(EC.invisibility_of_element_located((By.XPATH,
-                    "//table[@id='receivedTransactions']/thead/tr/th[contains(text(), 'Datum')]")))
-        except TimeoutException:
-            # Perhaps the bank was quick enough to download the required account or it was open already
-            pass
+        #self.wait().until(EC.invisibility_of_element_located((By.XPATH,
+        #    "//table[@id='receivedTransactions']/thead/tr/th[contains(text(), 'Datum')]")))
+        self.wait().until(EC.presence_of_element_located((By.XPATH,
+            "//table[@id='receivedTransactions']/thead/tr/th[contains(text(), 'Datum')]")))
 
-        # And until it is loaded.
-        WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.XPATH,
-                    "//table[@id='receivedTransactions']/thead/tr/th[contains(text(), 'Datum')]")))
+        statement = Statement(account = account)
 
-        # Expand all the statement lines until the date from or until there are no more statements
+        # Known transaction types...
+        transaction_types = {
+            'AC'    : transactionType.PAYMENT,
+            'IC'    : transactionType.DIRECTDEBIT,
+            'BA'    : transactionType.POS,
+            'OV'    : transactionType.XFER,
+            'DV'    : transactionType.OTHER,
+            'PK'    : transactionType.CASH,
+            'FL'    : transactionType.XFER,
+            'PO'    : transactionType.REPEATPMT,
+            'GF'    : transactionType.XFER,
+            'ST'    : transactionType.DEP,
+            'GM'    : transactionType.ATM,
+            'VZ'    : transactionType.DIRECTDEBIT,
+            'GT'    : transactionType.XFER
+        }
+
+        rows = self.locate_all((By.XPATH, "//table[@id='receivedTransactions']/tbody/tr"))
         while True:
-            for tr in self.driver.find_elements_by_xpath("//table[@id='receivedTransactions']/tbody/tr"):
-                # Have we already clicked on it?
-                if tr.find_elements_by_class_name('ng-hide'):
-                    tr.click()
-
+            for tr in rows:
                 # Skip horizontal lines...
                 if tr.find_elements_by_tag_name('hr'):
                     continue
 
-                tr_date = datetime.strptime(tr.find_elements_by_tag_name('td')[0].text,'%d-%m-%Y').date()
+                if tr.find_elements_by_css_selector('div.ng-hide'):
+                    tr.click()
 
-                if datefrom and tr_date < datefrom:
-                    return
+                (td_date, td_descr, td_type, td_amount) = tr.find_elements_by_tag_name('td')
+                transaction = Transaction(
+                    date  = datetime.strptime(td_date.text,'%d-%m-%Y').date(),
+                    type  = transaction_types.get(td_type.text, None)
+                )
+
+                if account.last_download and transaction.date < account.last_download.date():
+                    return statement.finalize()
+
+                # Amount...
+                m = re.match('([^\s]+)\s(Af|Bij)',td_amount.text)
+                transaction.amount = float(m.group(1).replace('.','').replace(',','.'))
+
+                # Sign and type
+                if m.group(2) == 'Bij':
+                    if not transaction.type:
+                        transaction.type = transactionType.CREDIT
+                        logger.warning('uknown transaction type %s, using generic credit' % td_type.text)
+                elif m.group(2) == 'Af':
+                    transaction.amount = -transaction.amount
+                    if not transaction.type:
+                        transaction.type = transactionType.DEBIT
+                        logger.warning('uknown transaction type %s, using generic debit' % td_type.text)
+                else:
+                    raise ValueError('No sign for transaction')
+
+                all_data = td_descr.find_element_by_xpath(
+                    "div/div/b[text()='Mededelingen']/../following-sibling::div").text.split('\n')
+
+                transaction.name = all_data[0].replace('Naam: ','')
+
+                all_data[1] = all_data[1].replace('Omschrijving: ', '')
+                transaction.memo = "\n".join(all_data[1:])
+
+                statement.transactions.append(transaction)
 
             # Click to download more
-            try:
-                getMore = self.driver.find_element_by_id('getMore')
-                showMore = self.driver.find_element_by_id('showMore')
-                if getMore.is_displayed():
-                    getMore.click()
-                elif showMore.is_displayed():
-                    showMore.click()
-                else:
-                    return
-
-            except NoSuchElementException:
-                # reached the end
-                return
-
-    # Actually scrape the statement transactions
-    def scrape_current(self, account, datefrom = None, currency=None):
-
-        self.expand_account(account, datefrom)
-
-        transactions = []
-
-        # Scrape the transactions
-        for tr in self.driver.find_elements_by_xpath("//table[@id='receivedTransactions']/tbody/tr"):
-
-            # Skip horizontal lines...
-            if tr.find_elements_by_tag_name('hr'):
-                continue
-
-            (td_date, td_descr, td_type, td_amount) = tr.find_elements_by_tag_name('td')
-
-
-            line = {
-                'date' : datetime.strptime(td_date.text,'%d-%m-%Y').date(),
-            }
-
-            if datefrom and line['date'] < datefrom:
-                return transactions
-
-            m = re.match('([^\s]+)\s(Af|Bij)',td_amount.text)
-            line['amount'] = float(m.group(1).replace('.','').replace(',','.'))
-
-            if m.group(2) == 'Bij':
-                line['type'] = 'CREDIT'
-            elif m.group(2) == 'Af':
-                line['amount'] = -line['amount']
-                line['type'] = 'DEBIT'
+            getMore = self.driver.find_elements_by_id('getMore')
+            showMore = self.driver.find_elements_by_id('showMore')
+            if showMore and showMore[0].is_displayed():
+                    showMore[0].click()
+            elif getMore and getMore[0].is_displayed():
+                    getMore[0].click()
             else:
-                raise ValueError('No sign for transaction')
+                    return statement.finalize()
 
-            self.parse_td_descr(td_descr, line)
+            rows = self.locate_all_inner(tr, (By.XPATH, 'following-sibling::tr'))
 
-            logger.debug("appening transaction:\n%s" % pformat(line))
-            transactions.append(line)
 
-        return transactions
-
-    def parse_td_descr(self, td_descr, line):
+    def parse_td_descr(self, td_descr, transaction):
         logger.debug("parsing transaction description:\n%s" % td_descr.text)
 
         (line1, line2, all_data) = td_descr.find_elements_by_xpath('div')
-        line['name'] = line1.text.encode('utf-8').strip() + line2.text.encode('utf-8').strip()
-        line['memo'] = ""
+        transaction.name = line1.text.encode('utf-8').strip() + line2.text.encode('utf-8').strip()
+        transaction.memo = ""
 
         for div in all_data.find_elements_by_xpath('div'):
             div_class = div.get_attribute('class')
 
             if div_class == 'clearfix':
-                line['memo'] += "\n"
+                transaction.memo += "\n"
             elif 'l-w-30' in div_class:
-                line['memo'] += div.text.encode('utf-8').strip() + ': '
+                transaction.memo += div.text.encode('utf-8').strip() + ': '
             elif 'l-w-70' in div_class:
-                line['memo'] += div.text.encode('utf-8').strip()
+                transaction.memo += div.text.encode('utf-8').strip()
             else:
                 logger.debug('found an unexpected div %s in the transaction data - skipping' % div_class)
 

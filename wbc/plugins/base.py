@@ -37,8 +37,9 @@ class Plugin(object):
     CLICK_SLEEP = 1
     LOGIN_TIMEOUT = 45
 
-    def __init__(self):
+    def __init__(self, driver = webdriver.Firefox):
         logged_in = False
+        self.webdriver = driver
 
     # Plugin interface methods
     def open_browser(self):
@@ -47,9 +48,7 @@ class Plugin(object):
 
         :return:
         """
-        fp = webdriver.FirefoxProfile()
-        # fp.set_preference("network.proxy.socks_remote_dns", True)
-        self.driver = webdriver.Firefox(firefox_profile=fp)
+        self.driver = self.webdriver()
 
     def login(self, username, password):
         self.open_browser()

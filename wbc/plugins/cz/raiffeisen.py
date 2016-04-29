@@ -186,14 +186,13 @@ class Plugin(Plugin):
                 transaction = Transaction(
                     date = datetime.strptime(col['date'],'%d.%m.%Y').date(),
                     memo = col['note'],
-                    refnum =  col['code']
+                    refnum =  col['code'],
+                    type = transaction_types.get(col['type'], None)
                 )
 
                 if account.last_download and transaction.date < account.last_download.date():
                     return statement.finalize()
 
-                # Figure out the transaction type
-                transaction.type = transaction_types.get(col['type'], None)
 
                 if transaction.type == transactionType.POS:
                     transaction.name = col['note']
