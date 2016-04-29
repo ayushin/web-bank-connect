@@ -17,21 +17,21 @@ args = parser.parse_args()
 __temp = __import__(args.config, globals(), locals(), ['CONNECTIONS'], -1)
 CONNECTIONS = __temp.CONNECTIONS
 
-def find_connection_by_name(connection_name, connections):
+def find_connection_by_shortcut(connection_shortcut, connections):
     for c in connections:
-        if c.name == connection_name:
+        if c.shortcut == connection_shortcut:
             return c
     raise ValueError('could not find connection %s in configuration' % connection_name)
 
 if args.command == 'login':
     if args.connection:
-        find_connection_by_name(args.connection, CONNECTIONS).login()
+        find_connection_by_shortcut(args.connection, CONNECTIONS).login()
     else:
         raise argparse.ArgumentError(args.connection, "login command requires connection name")
 
 elif args.command == 'download':
     if args.connection:
-        CONNECTIONS = [find_connection_by_name(args.connection, CONNECTIONS)]
+        CONNECTIONS = [find_connection_by_shortcut(args.connection, CONNECTIONS)]
 
     statements = []
 
@@ -43,6 +43,7 @@ elif args.command == 'download':
     for statement in statements:
         print statement.account
         for transaction in statement.transactions:
-            print transaction.encode('utf-8')
+            print transaction
+
 elif args.command == 'list':
     pass
