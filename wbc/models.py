@@ -67,7 +67,8 @@ class Connection(object):
     plugins methods.
 
     """
-    def __init__(self, plugin, name, username, password, accounts = [], active = True, **kwargs):
+    def __init__(self, plugin, name, username, password = None,
+                 accounts = [], shortcut = None, active = True, **kwargs):
         """
         Creates a connection object and loads the specified plugin.
 
@@ -96,6 +97,7 @@ class Connection(object):
         self.username = username
         self.password = password
         self.accounts = accounts
+        self.shortcut = shortcut or name
 
         # Pass the optional arguments to the connection
         for kw in kwargs.keys():
@@ -104,6 +106,8 @@ class Connection(object):
     def login(self):
         # Log-in if not already
         if not self.plugin.logged_in:
+            if not self.password:
+                self.password = self.plugin.user_input('Please enter your password:')
             self.plugin.login(username = self.username, password = self.password)
         assert self.plugin.logged_in
 
@@ -250,6 +254,9 @@ class Balance(object):
         self.date = date
         self.amount = amount
         return self
+
+    def __str__(self):
+        return "Balance %s on %s" % (self.amount, self.date)
 
 class transactionType:
     CREDIT      = 'credit'      # Generic credit
