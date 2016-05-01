@@ -165,13 +165,13 @@ class Connection(object):
         :return:
         """
         conf_str = """Connection(
-            name        = %s,
-            plugin      = %s,
-            username    = %s,
-            password    = %s,
+            name        = '%s',
+            plugin      = '%s',
+            username    = '%s',
+            password    = '%s',
             active      = %s,
             accounts    = [
-            """
+            """ % (self.name, self.plugin.name, self.username, self.password, self.active)
         for account in self.accounts:
             conf_str += account.__conf__str__()
 
@@ -196,11 +196,11 @@ class Account(object):
 
     def __conf__str__(self):
         return """Account(
-            name = %s,
-            type = %s,
+            name = '%s',
+            type = '%s',
             active = %s,
             last_download = %s,
-            currency = %s
+            currency = '%s'
             )""" % (self.name, self.type, self.active, self.last_download, self.currency)
 
     def __str__(self):
@@ -253,7 +253,6 @@ class Balance(object):
     def __init__(self, date, amount):
         self.date = date
         self.amount = amount
-        return self
 
     def __str__(self):
         return "Balance %s on %s" % (self.amount, self.date)

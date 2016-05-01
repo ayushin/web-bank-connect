@@ -103,7 +103,7 @@ def download_transactions(connection, ra, moneydance):
 
         if statement.closing_balance:
             downloadedTransactions.setOnlineLedgerBalance(\
-                account.getCurrencyType().parse(str(statement.closing_balance.amount), '.'),
+                account.md_account.getCurrencyType().parse(str(statement.closing_balance.amount), '.'),
                     long((statement.closing_balance.date - date(1970, 1, 1)).total_seconds()*1000))
 
         # Update the last download date...

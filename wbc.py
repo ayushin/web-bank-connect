@@ -46,4 +46,9 @@ elif args.command == 'download':
             print transaction
 
 elif args.command == 'list':
-    pass
+    if args.connection:
+        CONNECTIONS = [find_connection_by_shortcut(args.connection, CONNECTIONS)]
+
+    for connection in CONNECTIONS:
+        connection.accounts = connection.list_accounts()
+        print connection.__conf__str__()

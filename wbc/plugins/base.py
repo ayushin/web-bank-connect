@@ -25,6 +25,7 @@ def load_plugin(plugin_name):
     m = __import__( module )
     for comp in parts[1:]:
         m = getattr(m, comp)
+    m.name = plugin_name
     return m()
 
 # Definition of web bank connector

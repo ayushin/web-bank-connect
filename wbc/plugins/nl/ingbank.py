@@ -29,6 +29,7 @@ class Plugin(Plugin):
     LOGIN_URL = 'https://mijn.ing.nl/internetbankieren/SesamLoginServlet'
     ACCOUNTS_URL = 'https://bankieren.mijn.ing.nl/particulier/betalen/index'
     CREDITCARD_URL = 'https://bankieren.mijn.ing.nl/particulier/creditcard/saldo-overzicht/index'
+    CREDITCARD__LIST_URL = 'https://bankieren.mijn.ing.nl/particulier/creditcard/index'
 
     #
     #
@@ -68,6 +69,19 @@ class Plugin(Plugin):
         self.driver.get(self.CREDITCARD_URL)
 
         statement = Statement(account = account)
+
+        # card_li = self.locate((By.XPATH,
+        #     "//div[@class='riaf-focusgroup-column-left']/div/div/div[@class='riaf-focusgroup-itemselector-content']/"
+        #     + "div/ul/li[@class='actief']/p[@class='riaf-focusgroup-itemselector-name'][contains(.,'"
+        #     + account.name + "')]/.."))
+        # card_li.click()
+        #
+        # statement.closing_balance = Balance(
+        #     date    = datetime.utcnow().date(),
+        #     amount  = float(card_li.find_element_by_css_selector(
+        #         'p.riaf-focusgroup-itemselector-balance').text.encode('utf-8').replace('.','').replace(',','.').replace('€','').strip())
+        # )
+        # logger.info('credit card %s balance %f' % (statement.account.name, statement.closing_balance.amount))
 
         # We keep on clicking on "previous period" until we reach the datefrom or the very first statement available
         while True:
@@ -143,17 +157,33 @@ class Plugin(Plugin):
         sleep(self.CLICK_SLEEP)
 
         # Navigate to the account... Click
-        self.locate((By.XPATH, "//div[@id='accounts']/div/div/ol/li/a/div[contains(text(), '"
-                     + account.name + "')]")).click()
+        account_div = self.locate((By.XPATH, "//div[@id='accounts']/div/div/ol/li/a/div[contains(text(), '"
+                     + account.name + "')]"))
+        account_div.click()
         sleep(self.CLICK_SLEEP)
+
+        statement = Statement(account = account)
+        statement.closing_balance = Balance(
+            date    = datetime.utcnow().date(),
+            amount  = float(account_div.find_element_by_xpath(
+                'following-sibling::div').text.encode('utf-8').replace('.','').replace(',','.').replace('€','').strip())
+        )
+        logger.info('account %s balance %f' % (statement.account.name, statement.closing_balance.amount))
 
         # Wait until the new account started to load...
         #self.wait().until(EC.invisibility_of_element_located((By.XPATH,
         #    "//table[@id='receivedTransactions']/thead/tr/th[contains(text(), 'Datum')]")))
+
+        try:
+            self.driver.find_element_by_id('endListMessage')
+            logger.info('No transactions for %s' % account.name)
+            return statement
+        except NoSuchElementException:
+            pass
+
         self.wait().until(EC.presence_of_element_located((By.XPATH,
             "//table[@id='receivedTransactions']/thead/tr/th[contains(text(), 'Datum')]")))
 
-        statement = Statement(account = account)
 
         # Known transaction types...
         transaction_types = {
@@ -173,6 +203,7 @@ class Plugin(Plugin):
         }
 
         rows = self.locate_all((By.XPATH, "//table[@id='receivedTransactions']/tbody/tr"))
+
         while True:
             for tr in rows:
                 # Skip horizontal lines...
@@ -231,25 +262,6 @@ class Plugin(Plugin):
             rows = self.locate_all_inner(tr, (By.XPATH, 'following-sibling::tr'))
 
 
-    def parse_td_descr(self, td_descr, transaction):
-        logger.debug("parsing transaction description:\n%s" % td_descr.text)
-
-        (line1, line2, all_data) = td_descr.find_elements_by_xpath('div')
-        transaction.name = line1.text.encode('utf-8').strip() + line2.text.encode('utf-8').strip()
-        transaction.memo = ""
-
-        for div in all_data.find_elements_by_xpath('div'):
-            div_class = div.get_attribute('class')
-
-            if div_class == 'clearfix':
-                transaction.memo += "\n"
-            elif 'l-w-30' in div_class:
-                transaction.memo += div.text.encode('utf-8').strip() + ': '
-            elif 'l-w-70' in div_class:
-                transaction.memo += div.text.encode('utf-8').strip()
-            else:
-                logger.debug('found an unexpected div %s in the transaction data - skipping' % div_class)
-
     def logout(self):
         # keep the browser open for the development
         return
@@ -261,10 +273,11 @@ class Plugin(Plugin):
     #
     def list_accounts(self):
         accounts = []
-        logger.info("Navigating to %s", self.accounts_url)
-        self.driver.get(self.accounts_url)
+        logger.info("Navigating to %s", self.ACCOUNTS_URL)
+        self.driver.get(self.ACCOUNTS_URL)
 
         accounts_ol = self.driver.find_element_by_xpath("//div[@id='accounts']/div/div/ol")
+
         # Expand...
         while True:
             showMore = accounts_ol.find_element_by_id('accountslider')
@@ -281,39 +294,23 @@ class Plugin(Plugin):
             if account_li.get_attribute('id') in ('accountslider', 'totalBalance'):
                 continue
 
-            account_data = account_li.find_elements_by_xpath('a/div')
-            account = {
-                'type'          :   'current',
-                'name'          :   account_data[1].text.encode('utf-8'),
-                'owner'         :   account_data[0].text.encode('utf-8'),
-                'balance'       :   {
-                    'amount'    :   float(account_data[2].text.encode('utf-8').replace('.', '').replace(',','.').replace('€ ','')),
-                    'date'      :   datetime.utcnow().date()
-                }
-            }
+            accounts.append(Account(
+                type    =   'current',
+                name    =   account_li.find_elements_by_xpath('a/div')[1].text
+            ))
 
-            accounts.append(account)
+        # Check if we have a credit card...
+        logger.info("Navigating to %s", self.CREDITCARD__LIST_URL)
+        self.driver.get(self.CREDITCARD__LIST_URL)
 
-        # # Check if we have a credit card...
-        # logger.info("Navigating to %s", self.creditcard_url)
-        # self.driver.get(self.creditcard_url)
-        #
-        # self.driver.find_element_by_id('cards_selector').click()
-        #
-        # credit_cards_tbody = self.driver.find_element_by_xpath(
-        #     "//form[@id='cards_selector_form']/div/div/div/span/div/div/div[@class='riaf-popup']/div/table/tbody")
-        #
-        #
-        # account = {
-        #     'type'  : 'ccard',
-        #     'name'  : credit_cards_tbody.find_element_by_xpath("tr/td/div/span[@class='riaf-listrenderer-account--accountnumber']").text.encode('utf-8'),
-        #     'owner'  : credit_cards_tbody.find_element_by_xpath("tr/td/div/span[@class='riaf-listrenderer-account--accountname']").text.encode('utf-8'),
-        #     'balance': {
-        #         'amount'    : float(credit_cards_tbody.find_element_by_xpath("tr/td[@class='riaf-listrenderer-account--amount']").text.encode('utf-8').replace('.', '').replace(',','.').replace('€ ','')),
-        #         'date'      : datetime.utcnow().date()
-        #     }
-        #
-        # }
-        # accounts.append(account)
+        cards = self.locate_all((By.CSS_SELECTOR,
+            "div.riaf-focusgroup-column-left div div div.riaf-focusgroup-itemselector-content div ul li.actief"))
+
+        for card in cards:
+            accounts.append(Account(
+                type    =   'ccard',
+                # The first p of this class is the name
+                name    =   card.find_element_by_css_selector('p.riaf-focusgroup-itemselector-name').text
+            ))
 
         return accounts
