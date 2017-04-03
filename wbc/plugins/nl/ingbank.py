@@ -85,6 +85,8 @@ class Plugin(Plugin):
 
         # We keep on clicking on "previous period" until we reach the datefrom or the very first statement available
         while True:
+            # XXX neeeded for the loading of the page
+            sleep(3)
             # get all the lines of the current period
             for tr in self.locate_all((By.XPATH,
                 "//div[@id='statementDetailTable']/div/div[@class='riaf-datatable-canvas']"

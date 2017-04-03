@@ -96,6 +96,8 @@ class Plugin(object):
             sleep(0.5)
         raise TimeoutException
 
+    def element_is_not_displayed(self, element):
+	    return not self.element_is_displayed(element)
 
     def element_is_displayed(self, element):
         try:

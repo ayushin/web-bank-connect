@@ -32,7 +32,7 @@ class Plugin(Plugin):
     CLICK_SLEEP = 1
     DEFAULT_TIMEOUT = 3
     LOGIN_TIMEOUT = 15
-    LOGIN_URL = 'https://klient1.rb.cz/ebts/version_02/eng/banka3.html'
+    LOGIN_URL = 'https://www.rb.cz/osobni'
 
     def logout(self):
         pass
@@ -43,28 +43,32 @@ class Plugin(Plugin):
         self.driver.get(self.LOGIN_URL)
 
         # Get the main frame...
-        self.driver.switch_to.frame('Main')
+        #self.driver.switch_to.frame('Main')
+
+	# Open the login dialogue...
+	self.locate((By.XPATH, "//a[@class='login__button']")).click()
 
         # Wait for the username and type it in...
         self.locate(
-            (By.XPATH, "//input[@name='a_username' and @type='text']")
+            (By.XPATH, "//input[@name='client-id' and @type='text']")
         ).send_keys(username)
+        self.locate((By.ID, "sendSms1")).click()
 
         # Open the certification prompt box and accept it...
-        self.locate((By.NAME, "b_authcode_Button")).click()
-        self.wait().until(EC.alert_is_present())
-        self.driver.switch_to.alert.accept()
+        #self.locate((By.NAME, "b_authcode_Button")).click()
+        #self.wait().until(EC.alert_is_present())
+        #self.driver.switch_to.alert.accept()
 
         # Get the auth code from the user and send it together with the 'pin'...
         auth_code = ''
         while not re.match('\d{11}', auth_code):
             auth_code = self.user_input("Please enter 11 digit auth code without dashes:\n")
 
-        self.locate((By.NAME, "a_userpassword")).send_keys(auth_code)
-        self.locate((By.NAME, "Pin")).send_keys(password)
+        self.locate((By.NAME, "auth-code")).send_keys(auth_code)
+        self.locate((By.NAME, "i-pin")).send_keys(password)
 
         # Click OK to log in
-        self.locate((By.NAME, "b_ok_Button")).click()
+        self.locate((By.ID, "login1")).click()
 
         # Wait for the MainMenu to appear...
         self.driver.switch_to.default_content()
@@ -152,7 +156,8 @@ class Plugin(Plugin):
             'Outgoing SEPA payment':    transactionType.PAYMENT,
             'Credit interest'           : transactionType.INT,
             'Transfer'                  : transactionType.XFER,
-            'Incoming SEPA payment'     : transactionType.PAYMENT
+            'Incoming SEPA payment'     : transactionType.PAYMENT,
+            'Incoming payment'     : transactionType.PAYMENT
         }
 
         # Scrape the account...

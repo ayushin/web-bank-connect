@@ -50,14 +50,14 @@ class Plugin(Plugin):
         self.locate((By.ID, 'otpPassword')).send_keys(auth_code)
         self.locate((By.ID, 'btnSubmit')).click()
 
-        self.locate((By.LINK_TEXT,"MY ACCOUNTS"), wait = self.LOGIN_TIMEOUT)
+        self.locate((By.PARTIAL_LINK_TEXT,"MY ACCOUNTS"), wait = self.LOGIN_TIMEOUT)
         self.logged_in = True
 
     def navigate_current_accounts(self):
         logger.debug('Navigating to accounts list..')
-        self.locate((By.LINK_TEXT, "MY ACCOUNTS")).click()
+        self.locate((By.PARTIAL_LINK_TEXT, "MY ACCOUNTS")).click()
         sleep(self.CLICK_SLEEP)
-        self.locate((By.LINK_TEXT, "My Current Accounts")).click()
+        self.locate((By.PARTIAL_LINK_TEXT, "My Current Accounts")).click()
         sleep(self.CLICK_LONG_SLEEP)
 
     #
@@ -130,24 +130,26 @@ class Plugin(Plugin):
             if 'getMore_row' in td[0].get_attribute('class'):
                 if td[0].is_displayed():
                     tr.find_element_by_id('btnGetMore').click()
-                    self.wait().until_not(self.element_is_displayed(tr))
+                    sleep(3)
+                    #self.wait().until_not(self.element_is_displayed(tr))
                 else:
                     # No more rows?
                     break
             else:
-                transaction = Transaction(
-                    date    = datetime.strptime(td[1].text.encode('utf-8'), '%d/%m/%Y'),
-                    name    = td[4].text,
-                    memo    = td[4].text,
-                    amount  = float(amount_p.match(td[5].text).group(1).replace('.','').replace(',','.'))
-                )
+                if td[1].text.encode('utf-8') != '-':
+                    transaction = Transaction(
+                        date    = datetime.strptime(td[1].text.encode('utf-8'), '%d.%m.%Y'),
+                        name    = td[4].text,
+                        memo    = td[4].text,
+                        amount  = float(amount_p.match(td[5].text).group(1).replace('.','').replace(',','.'))
+                    )
 
-                if(transaction.amount > 0):
-                    transaction.type = transactionType.CREDIT
-                else:
-                    transaction.type = transactionType.DEBIT
+                    if(transaction.amount > 0):
+                        transaction.type = transactionType.CREDIT
+                    else:
+                        transaction.type = transactionType.DEBIT
 
-                statement.transactions.append(transaction)
+                    statement.transactions.append(transaction)
 
                 # Save this tr as prev_tr...
                 prev_tr = tr

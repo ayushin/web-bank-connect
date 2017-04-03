@@ -8,7 +8,7 @@ This module will only work when called from inside of the Moneydance python cons
 
 """
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, time
 
 from com.moneydance.apps.md.view.gui import MDAccountProxy
 from javax.swing import JOptionPane
@@ -82,8 +82,8 @@ def download_transactions(connection, ra, moneydance):
             # If we have a reservation --  next time we should start our update from that date...
             if transaction.reservation:
                 logger.info('skipping reservation of %s on %s' % (transaction.amount, transaction.date))
-                if transaction.date < last_download.date:
-                    last_download = datetime.date(transaction.date)
+                if transaction.date < last_download.date():
+                    last_download = datetime.combine(transaction.date, time.min)
                 continue
 
             # Insert the transaction

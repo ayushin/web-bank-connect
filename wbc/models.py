@@ -129,10 +129,11 @@ class Connection(object):
             if not account.active:
                 continue
             # Download interval is set and is it time?
-            if account.download_interval:
-                if datetime.utcnow() - account.last_download < account.download_interval:
-                    logger.info('too early to download %s - skipping' % account.name)
-                    continue
+            if account.last_download:
+                if account.download_interval:
+                    if datetime.utcnow() - account.last_download < account.download_interval:
+                        logger.info('too early to download %s - skipping' % account.name)
+                        continue
 
             # login() handles multiple calls without re-logging in...
             self.login()
@@ -234,11 +235,11 @@ class Statement(object):
 
             trnhash = md5(
                 str(transaction.date) +
-                transaction.name.encode('utf-8') +
-                transaction.memo.encode('utf-8') +
+                str(transaction.name.encode('utf-8')) +
+                str(transaction.memo.encode('utf-8')) +
                 str(transaction.type) +
                 str(transaction.amount) +
-                (transaction.refnum or '')
+                str(transaction.refnum or '')
             ).hexdigest()
 
             if duplicates.get('trnhash'):
