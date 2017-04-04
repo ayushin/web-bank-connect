@@ -32,15 +32,15 @@ def load_plugin(plugin_name):
 class Plugin(object):
     user_input = raw_input
     logged_in  = False
+    webdriver  = 'Firefox'
 
     # Some reasonable defaults
     DEFAULT_TIMEOUT = 5
     CLICK_SLEEP = 1
     LOGIN_TIMEOUT = 45
 
-    def __init__(self, driver = webdriver.Firefox):
+    def __init__(self):
         logged_in = False
-        self.webdriver = driver
 
     # Plugin interface methods
     def open_browser(self):
@@ -49,7 +49,7 @@ class Plugin(object):
 
         :return:
         """
-        self.driver = self.webdriver()
+        self.driver = eval('webdriver.' + self.webdriver + '()')
 
     def login(self, username, password):
         self.open_browser()

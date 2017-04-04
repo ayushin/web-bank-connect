@@ -43,8 +43,8 @@ class Plugin(Plugin):
         self.driver.get(self.LOGIN_URL)
         assert "ING" in self.driver.title
 
-        self.locate((By.XPATH, '//label[text()="Gebruikersnaam"]')).send_keys(username)
-        self.locate((By.XPATH, '//label[text()="Wachtwoord"]')).send_keys(password)
+        self.locate((By.CSS_SELECTOR, 'div#gebruikersnaam input')).send_keys(username)
+        self.locate((By.CSS_SELECTOR, 'div#wachtwoord input')).send_keys(password)
         self.locate((By.CSS_SELECTOR, '.submit')).click()
 
         self.locate((By.XPATH,
@@ -246,7 +246,8 @@ class Plugin(Plugin):
 
                 transaction.name = all_data[0].replace('Naam: ','')
 
-                all_data[1] = all_data[1].replace('Omschrijving: ', '')
+                if len(all_data) > 1:
+                    all_data[1] = all_data[1].replace('Omschrijving: ', '')
                 transaction.memo = "\n".join(all_data[1:])
 
                 statement.transactions.append(transaction)
