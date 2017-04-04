@@ -1,20 +1,28 @@
 import argparse
 import logging
-
-
 import os
-import imp
 
-DEFAULT_CONFIG = os.path.join(os.path.expanduser('~'), '.wbc_config.py')
+# Prepare the variable for reading-in the configuration file...
+DEFAULT_CONFIG = os.path.join(os.path.expanduser('~'), '.wbc', 'config.py')
+CONNECTIONS = []
+
+from datetime import datetime, timedelta
+from wbc.models import Connection, Account, NEVER
 
 logging.basicConfig()
 
-from datetime import datetime, timedelta
+def find_connection_by_shortcut(connection_shortcut, connections):
+    for c in connections:
+        if c.shortcut == connection_shortcut:
+            return c
+    raise ValueError('could not find connection %s in configuration' % connection_name)
 
 def main():
     # 1. Configure
     parser = argparse.ArgumentParser('web bank connect utility script')
-    parser.add_argument('--config', default = DEFAULT_CONFIG, type = str, help = 'config module to load')
+    parser.add_argument('--config', default = DEFAULT_CONFIG,
+            type = argparse.FileType('r'),
+            help = 'configuration file to load')
     parser.add_argument('--account', default = None, type = str, help = 'account for downloading of transactions')
 
     parser.add_argument('command', choices=['login', 'download', 'list', 'config'])
@@ -22,22 +30,8 @@ def main():
 
     args = parser.parse_args()
 
-    # 2. Load connections from local
-    #__temp = __import__(args.config, globals(), locals(), ['CONNECTIONS'], -1)
-
-    try:
-        __temp = imp.load_source('wbc.config', args.config)
-        CONNECTIONS = __temp.CONNECTIONS
-    except:
-        print "Unable to load the configuration from " + args.config
-        raise
-
-
-    def find_connection_by_shortcut(connection_shortcut, connections):
-        for c in connections:
-            if c.shortcut == connection_shortcut:
-                return c
-        raise ValueError('could not find connection %s in configuration' % connection_name)
+    # Load the local configuration that should contain at least CONNECTIONS[] list
+    exec(args.config)
 
     if args.command == 'login':
         if args.connection:
@@ -71,3 +65,7 @@ def main():
 
     elif args.command == 'config':
         print __temp.__file__
+
+
+if __name__ == '__main__':
+    main()

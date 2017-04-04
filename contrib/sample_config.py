@@ -1,16 +1,18 @@
 #
-# Copy this file to local/config.py and modify it according to your needs
+#
+# Copy this file to ~/.wbc/config.py (or elsewhere and use --config option) and modify according to your needs
+#
 #
 # Author: Alex Yushin <alexis@ww.net>
 #
-from wbc import Connection, Account, NEVER
-
+#
 CONNECTIONS = [
     Connection(
         name        = 'BANK1',
         plugin      = 'nl.bank1',
         # It is possible to override the default driver
-        # driver      = 'PhantomJS'
+        # driver    = 'Chrome'
+        # driver    = 'PhantomJS'
         username    = 'user1',
         password    = 'password1',
         accounts    = [
@@ -21,6 +23,9 @@ CONNECTIONS = [
                 # It is possible to override the last download date and time, otherwise Moneydance last
                 # download timestamp will be used (if used with moneydance)
                 last_download = NEVER,
+                # If download interval is specified then the wbc won't try downloading this account until
+                # download_interval is elapsed since the last_download
+                download_interval=timedelta(hours=1),
                 # The import will skip inactive account
                 # active = False,
             ),

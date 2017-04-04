@@ -17,6 +17,6 @@ setup(name='web-bank-connect',
                 'wbc.plugins.nl',
                 'wbc.plugins.tr'],
     entry_points = {
-        'console_scripts': ['wbc=wbc.command_line:main'],
+        'console_scripts': ['wbc=wbc.cli:main'],
     }
 )
