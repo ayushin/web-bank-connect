@@ -30,7 +30,7 @@ FIREFOX_PATH = '/Applications/Firefox.app/Contents/MacOS'
 os.environ['PATH'] += os.pathsep + FIREFOX_PATH
 
 # 2. Set up local connections...
-from local.config import *
+from sample_config import *
 
 # 3. Run the script..
 from wbc.moneydance import download_all_transactions

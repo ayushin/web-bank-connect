@@ -13,3 +13,4 @@ clean:
 	python setup.py clean
 	rm -rf dist build *egg-info
 	find . -name \*.pyc | xargs rm -f --
+	find . -name \*.log | xargs rm -f --
